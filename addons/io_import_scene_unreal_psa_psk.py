@@ -19,8 +19,8 @@
 bl_info = {
     "name": "Import Unreal Skeleton Mesh (.psk)/Animation Set (.psa)",
     "author": "Darknet, flufy3d, camg188, befzz",
-    "version": (2, 5),
-    "blender": (2, 70, 0),
+    "version": (2, 6),
+    "blender": (2, 64, 0),
     "location": "File > Import > Skeleton Mesh (.psk)/Animation Set (.psa)",
     "description": "Import Skeleleton Mesh/Animation Data",
     "warning": "",
@@ -44,69 +44,55 @@ Imports a *psk file to a new mesh
 """
 
 """
-Version': '2.5+' edited by befzz
-
-+ Animation import fix
-+ Code cleaning
-+ Much refractoring and improvements
-
+Version': '2.6' edited by befzz
+Github: https://github.com/Befzz/blender3d_import_psk_psa
+- No Scale support.
 """
 
 import bpy
 import math
 import re
-import mathutils
-from mathutils import Vector,Matrix,Quaternion
+from mathutils import Vector, Matrix, Quaternion
 from bpy.props import FloatProperty, StringProperty, BoolProperty, CollectionProperty, IntProperty
-from struct import unpack,unpack_from
+from struct import unpack, unpack_from
+from bpy_extras.io_utils import unpack_list, unpack_face_list
 
 
 bpy.types.Scene.unrealbonesize = FloatProperty(
     name="Bone Length",
-    description="Bone Length from head to tail distance",
+    description="Constant length for all bones. From head to tail distance",
     default=0.5, min=0.01, max=10
 )
 
-from bpy_extras.io_utils import unpack_list, unpack_face_list
-
-
-# regex_name = re.compile(b'[^\x00]+')
-# def str_from_bytes_decode(in_bytes):
-    # match_obj_name =regex_name.match(in_bytes)
-    # if match_obj_name is None:
-        # print('Can\'t get bone name!')
-        # return False
-    # return match_obj_name.group().decode(encoding='cp1252', errors='replace')
-    
 def utils_set_mode(mode):
     if bpy.ops.object.mode_set.poll():
             bpy.ops.object.mode_set(mode=mode, toggle = False)
 
-def str_from_bytes_decode(in_bytes):
+# since names have type ANSICHAR(signed char) - using cp1251(or 'ASCII'?)
+def util_bytes_to_str(in_bytes):
     return in_bytes.rstrip(b'\x00').decode(encoding='cp1252', errors='replace')
 
 class class_md5_bone:
     bone_index = 0
     name = ""
-    bindpos = []
+    # bindpos = []
     bindmat = []
     origmat = []
-    head = []
-    tail = []
+    # head = []
+    # tail = []
     scale = []
     parent = None
     parent_name = ""
     parent_index = 0
-    blenderbone = None
-    roll = 0
+    # blenderbone = None
 
     def __init__(self):
         self.bone_index = 0
         self.name = ""
-        self.bindpos = [0.0] * 3
+        # self.bindpos = [0.0] * 3
         self.scale = [0.0] * 3
-        self.head = [0.0] * 3
-        self.tail = [0.0] * 3
+        # self.head = [0.0] * 3
+        # self.tail = [0.0] * 3
         self.bindmat = [None] * 3
         for i in range(3):
             self.bindmat[i] = [0.0] * 3
@@ -115,16 +101,16 @@ class class_md5_bone:
             self.origmat[i] = [0.0] * 3
         self.parent = ""
         self.parent_index = 0
-        self.blenderbone = None
+        # self.blenderbone = None
 
     def dump(self):
         print ("bone index: ", self.bone_index)
         print ("name: ", self.name)
-        print ("bind position: ", self.bindpos)
+        # print ("bind position: ", self.bindpos)
         print ("bind translation matrix: ", self.bindmat)
         print ("parent: ", self.parent)
         print ("parent index: ", self.parent_index)
-        print ("blenderbone: ", self.blenderbone)
+        # print ("blenderbone: ", self.blenderbone)
         
 def select_all(select):
     if select:
@@ -164,41 +150,53 @@ def util_gen_name_part(filepath):
     '''strip path and extension from path'''
     return re.match(r'.*[/\\]([^/\\]+?)(\..{2,5})?$', filepath).group(1)
     
-def pskimport(infile, bImportmesh, bImportbone, bDebugLogPSK, bImportmultiuvtextures):
+def pskimport(filepath, bImportmesh, bImportbone, bDebugLogPSK, bImportmultiuvtextures):
     if not bImportbone and not bImportmesh:
         util_ui_show_msg("Nothing to do.\nSet something for import.")
         return False
     file_ext = 'psk'
-    DEBUGLOG = bDebugLogPSK
+    
     print ("--------------------------------------------------")
     print ("---------SCRIPT EXECUTING PYTHON IMPORTER---------")
     print ("--------------------------------------------------")
-    print (" DEBUG Log:",bDebugLogPSK)
-    print (" Importing file:", infile)
+    print (" Debug Enabled:", bDebugLogPSK)
+    print (" Importing file:", filepath)
 
     #file may not exist(while running from script)
     try:
-        pskfile = open(infile,'rb')
+        pskfile = open(filepath,'rb')
     except IOError:
-        util_ui_show_msg('Error while opening file for reading:\n  "'+infile+'"')
+        util_ui_show_msg('Error while opening file for reading:\n  "'+filepath+'"')
         return False
     
-    if DEBUGLOG:
-        #logpath = infile.lower().replace("."+file_ext, ".txt")
-        logpath = infile+".txt"
+    if bDebugLogPSK:
+        #logpath = filepath.lower().replace("."+file_ext, ".txt")
+        logpath = filepath+".txt"
         print("logpath:",logpath)
         logf = open(logpath,'w')
 
     def printlog(strdata):
-        if (DEBUGLOG):
+        if bDebugLogPSK:
             logf.write(strdata)
+            
+    def printlog_line(*args):
+        if not bDebugLogPSK:
+            return
+        logf.write('\t'.join(list(map(str,args)))+"\n")
+        
+    def printlog_header():
+        if not bDebugLogPSK:
+            return
+        logf.write('ChunkID: {0}\nTypeFlag: {1}\nDataSize: {2}\nDataCount: {3}\n'.format(
+                    util_bytes_to_str(chunk_header_id),  chunk_header_type,
+                    chunk_header_datasize, chunk_header_datacount))
 
-    # using this instead of class to avoid "object.prop" lookup 3x faster.
+    # using this instead of class to avoid "object.prop" lookup. 3x faster.
     chunk_header_id = None
     chunk_header_type = None
     chunk_header_datasize = None
     chunk_header_datacount = None
-    #all binary data of chunk for unpack (bytearray)
+    #all binary Data of chunk for unpack (bytearray)
     chunk_data = None
     
     #=================================================
@@ -206,7 +204,7 @@ def pskimport(infile, bImportmesh, bImportbone, bDebugLogPSK, bImportmultiuvtext
     # ChunkID|TypeFlag|DataSize|DataCount
     # 0      |1       |2       |3
     #=================================================
-    # read a header and chunk data to local variables
+    # read("map"/"assign") a header and chunk data to local variables
     def read_chunk():
         nonlocal chunk_header_id,\
                  chunk_header_type,\
@@ -225,10 +223,10 @@ def pskimport(infile, bImportmesh, bImportbone, bDebugLogPSK, bImportmultiuvtext
         chunk_data = pskfile.read(chunk_header_datacount * chunk_header_datasize)
 
         
-    # accept non ".psk" extension(can by supllied by script: bpy.ops.import_scene.psk())
+    # accept non ".psk" extension(can by supplied by script: bpy.ops.import_scene.psk())
     # should work good with "c:\file.some.model.psk" and "/home/xd/model.psk"
     # remove file extension( "." with 2-5 characters after it and at end of string)
-    gen_name_part = util_gen_name_part(infile)
+    gen_name_part = util_gen_name_part(filepath)
     gen_names = {
         'armature_object':  gen_name_part + '.ao',
         'armature_data':    gen_name_part + '.ad',
@@ -238,83 +236,66 @@ def pskimport(infile, bImportmesh, bImportbone, bDebugLogPSK, bImportmultiuvtext
     if bImportmesh:
         mesh_data = bpy.data.meshes.new(gen_names['mesh_data'])
         printlog("New Mesh Data = " + mesh_data.name + "\n")
-    
-    # read general header (datasize & datacount is zero)
+    #================================================================================================== 
+    # General
+    #================================================================================================== 
     read_chunk()
     
     # check file header
-    if not util_is_header_valid(infile, file_ext, chunk_header_id, chunk_header_type):
+    if not util_is_header_valid(filepath, file_ext, chunk_header_id, chunk_header_type):
         return False
-    
-    # Performance tips:
-    #---------------------------------
-    # for X in range(C):
-    #    ....
-    #
-    # is faster then
-    #
-    # while X < C:
-    #      X+=1
-    #
-    # tested. and proof link:
-    # http://stackoverflow.com/questions/11241523/why-does-python-code-run-faster-in-a-function
-    #---------------------------------
-    # list preallocation is faster too:
-    # http://stackoverflow.com/questions/311775/python-create-a-list-with-initial-capacity?answertab=active#tab-top
-    #---------------------------------
-    # creating many tuples is faster then do the same with list
-    # http://stackoverflow.com/questions/3340539/why-is-tuple-faster-than-list
-    
+
     #================================================================================================== 
-    # vertex point
+    # Points (Vertices)
     #================================================================================================== 
     #read the PNTS0000 header ( VPoint )
     read_chunk()
     if bImportmesh:
-        printlog("Nbr of PNTS0000 records: " + str(chunk_header_datacount) + "\n")
+        printlog_header()
 
         verts  = [None] * chunk_header_datacount
-        # verts2 = [None] * chunk_header_datacount
         
         for counter in range( chunk_header_datacount ):
             (vec_x, vec_y, vec_z) = unpack_from('3f', chunk_data, counter * chunk_header_datasize)
             verts[counter]  = (vec_x, vec_y, vec_z)
-            # verts2[counter] = (vec_x, vec_y, vec_z)
             
-            printlog(str(vec_x) + "|" + str(vec_y) + "|" + str(vec_z) + "\n")
+            printlog_line(vec_x, vec_y, vec_z)
             
-            #Tmsh.vertices.append(NMesh.Vert(indata[0], indata[1], indata[2]))
-
     #================================================================================================== 
-    # UV
+    # Wedges (UV)
     #================================================================================================== 
     # https://github.com/gildor2/UModel/blob/master/Exporters/Psk.h
     # for struct of VVertex
     #
-    #read the VTXW0000 header (VVertex)
+    #read the VTXW0000 header ( VVertex )
     read_chunk()
     
     if bImportmesh:
-        printlog("Nbr of VTXW0000 records: " + str(chunk_header_datacount)+ "\n")
+        printlog_header()
 
+        uv_material_indexes = []
         UVCoords = [None] * chunk_header_datacount
-        #UVCoords record format = [index to PNTS, U coord, v coord]
-        printlog("[index to PNTS, U coord, v coord]\n");
+        #UVCoords record format = [pntIndx, U coord, v coord]
+        printlog("[pntIndx, U coord, v coord]\n");
         for counter in range( chunk_header_datacount ):
             (point_index,
              u, v,
              material_index) = unpack_from('=IffBxxx', chunk_data, counter * chunk_header_datasize )
+             
             # print(point_index, u, v, material_index)
             UVCoords[counter] = (point_index, u, v)
-            printlog(str(point_index) + "|" + str(u) + "|" + str(v) + "\n")
-
+            
+            printlog_line(point_index,u,v)
+            if not material_index in uv_material_indexes:
+                uv_material_indexes.append(material_index)
+           
     #================================================================================================== 
-    # Face
+    # Faces
     #================================================================================================== 
     #read the FACE0000 header
     read_chunk()
     if bImportmesh:
-        printlog("Nbr of FACE0000 records: " + str(chunk_header_datacount) + "\n")
+        printlog_header()
         #PSK FACE0000 fields: WdgIdx1|WdgIdx2|WdgIdx3|MatIdx|AuxMatIdx|SmthGrp
         #associate MatIdx to an image, associate SmthGrp to a material
         SGlist = []
@@ -322,43 +303,31 @@ def pskimport(infile, bImportmesh, bImportbone, bDebugLogPSK, bImportmultiuvtext
         faces = [None] * chunk_header_datacount
         faceuv = [None] * chunk_header_datacount
         facesmooth = []
-        printlog("nWdgIdx1|WdgIdx2|WdgIdx3|MatIdx|AuxMatIdx|SmthGrp \n")
+        printlog("nWdgIdx1\tWdgIdx2\tWdgIdx3\tMatIdx\tAuxMatIdx\tSmthGrp \n")
         
         # smlist = []
         mat_groups = {}
         
         for counter in range(chunk_header_datacount):
-            (vertexA, vertexB, vertexC,
-             MatIndex, AuxMatIndex,
-             SmoothingGroup
+            (pntIndxA, pntIndxB, pntIndxC,
+             MatIndex, AuxMatIndex, SmoothingGroup
              ) = unpack_from('hhhbbi', chunk_data, counter * chunk_header_datasize)
              
-            printlog(str(vertexA)  + "|" + str(vertexB)     + "|" + str(vertexC)+ "|" 
-                   + str(MatIndex) + "|" + str(AuxMatIndex) + "|" + str(SmoothingGroup) + "\n")
-            # vertex[ABC] is index of 3 points of face
-            #
+            printlog_line(pntIndxA, pntIndxB, pntIndxC, MatIndex, AuxMatIndex, SmoothingGroup)
+
             # UVCoords is(point_index, u, v)
             #             0            1  2
-            PNTSA = UVCoords[vertexC][0]
-            PNTSB = UVCoords[vertexB][0]
-            PNTSC = UVCoords[vertexA][0]
+            PNTSA = UVCoords[pntIndxC][0]
+            PNTSB = UVCoords[pntIndxB][0]
+            PNTSC = UVCoords[pntIndxA][0]
             #print(PNTSA, PNTSB, PNTSC) #face id vertex
-            #faces.extend([0, 1, 2, 0])
+ 
             faces[counter] = (PNTSA, PNTSB, PNTSC, 0)
-            # uv = []
-            # u0 = UVCoords[vertexC][1]
-            # v0 = UVCoords[vertexC][2]
-            # uv.append([u0, 1.0 - v0])
-            # u1 = UVCoords[vertexB][1]
-            # v1 = UVCoords[vertexB][2]
-            # uv.append([u1, 1.0 - v1])
-            # u2 = UVCoords[vertexA][1]
-            # v2 = UVCoords[vertexA][2]
-            # uv.append([u2, 1.0 - v2])
+
             uv = (
-                ( UVCoords[vertexC][1], 1.0 - UVCoords[vertexC][2] ),
-                ( UVCoords[vertexB][1], 1.0 - UVCoords[vertexB][2] ),
-                ( UVCoords[vertexA][1], 1.0 - UVCoords[vertexA][2] )
+                ( UVCoords[pntIndxC][1], 1.0 - UVCoords[pntIndxC][2] ),
+                ( UVCoords[pntIndxB][1], 1.0 - UVCoords[pntIndxB][2] ),
+                ( UVCoords[pntIndxA][1], 1.0 - UVCoords[pntIndxA][2] )
             )
             
             faceuv[counter] = (uv, MatIndex, AuxMatIndex, SmoothingGroup)
@@ -386,15 +355,14 @@ def pskimport(infile, bImportmesh, bImportbone, bDebugLogPSK, bImportmultiuvtext
             print('mat_group,len:',mg,len(mat_groups[mg]))
     
     #================================================================================================== 
-    # Material
+    # Materials
     #================================================================================================== 
     #read the MATT0000 header
-    
     read_chunk()
+    
     if bImportmesh:
-        printlog("Nbr of MATT0000 records: " +  str(chunk_header_datacount) + "\n" )
-        printlog(" - Not importing any material data now. PSKs are texture wrapped! \n")
-        counter = 0
+        printlog_header()
+        # printlog(" - Not importing any material data now. PSKs are texture wrapped! \n")
 
         materials = []
         
@@ -408,65 +376,66 @@ def pskimport(infile, bImportmesh, bImportbone, bDebugLogPSK, bImportmultiuvtext
              LodBias,
              LodStyle ) = unpack_from('64s6i', chunk_data, chunk_header_datasize * counter)
             
-            materialname = str_from_bytes_decode( MaterialNameRaw )
+            materialname = util_bytes_to_str( MaterialNameRaw )
             matdata = bpy.data.materials.new(materialname)
             materials.append(matdata)
             mesh_data.materials.append(matdata)
             # print("Mat %i name:" % counter, materialname,TextureIndex,PolyFlags)
 
     #================================================================================================== 
-    # Bones (Armature)
+    # Bones (VBone .. VJointPos )
     #================================================================================================== 
     #read the REFSKEL0 header
     read_chunk()
 
-    printlog( "Nbr of REFSKEL0 records: " + str(chunk_header_datacount) + "\n")
+    printlog_header()
     #REFSKEL0 fields - Name|Flgs|NumChld|PrntIdx|Qw|Qx|Qy|Qz|LocX|LocY|LocZ|Lngth|XSize|YSize|ZSize
 
     md5_bones = []
     bni_dict = {}
 
-    printlog("Name|Flgs|NumChld|PrntIdx|Qx|Qy|Qz|Qw|LocX|LocY|LocZ|Lngth|XSize|YSize|ZSize\n")
+    printlog("Name\tFlgs\tNumChld\tPrntIdx\tQx\tQy\tQz\tQw\tLocX\tLocY\tLocZ\tLngth\tXSize\tYSize\tZSize\n")
 
     for counter in range( chunk_header_datacount ):
         
-        indata = unpack_from('64s3i11f', chunk_data, chunk_header_datasize * counter)
+        (name_raw, flags, NumChildren, ParentIndex, #0 1 2 3
+         quat_x, quat_y, quat_z, quat_w,            #4 5 6 7
+         vec_x, vec_y, vec_z,                       #8 9 10
+         joint_length, #11
+         scale_x, scale_y, scale_z) = unpack_from('64s3i11f', chunk_data, chunk_header_datasize * counter)
     
         md5_bone = class_md5_bone()
       
-        temp_name = str_from_bytes_decode(indata[0])
+        bone_name = util_bytes_to_str(name_raw)
 
-        printlog(temp_name + "|" + str(indata[1]) + "|" + str(indata[2]) + "|" + str(indata[3]) + "|" +
-                 str(indata[4]) + "|" + str(indata[5]) + "|" + str(indata[6]) + "|" + str(indata[7]) + "|" +
-                 str(indata[8]) + "|" + str(indata[9]) + "|" + str(indata[10]) + "|" + str(indata[11]) + "|" +
-                 str(indata[12]) + "|" + str(indata[13]) + "|" + str(indata[14]) + "\n")
-        md5_bone.name = temp_name
+        printlog_line(util_bytes_to_str(name_raw), flags, NumChildren, ParentIndex, quat_x, quat_y, quat_z, quat_w,            
+                      vec_x, vec_y, vec_z, joint_length, scale_x, scale_y, scale_z )
+                      
+        md5_bone.name = bone_name
         md5_bone.bone_index = counter
-        md5_bone.parent_index = indata[3]
-        md5_bone.bindpos[0] = indata[8]
-        md5_bone.bindpos[1] = indata[9]
-        md5_bone.bindpos[2] = indata[10]
-        md5_bone.scale[0] = indata[12]
-        md5_bone.scale[1] = indata[13]
-        md5_bone.scale[2] = indata[14]
+        md5_bone.parent_index = ParentIndex
+        # md5_bone.bindpos[0] = indata[8]
+        # md5_bone.bindpos[1] = indata[9]
+        # md5_bone.bindpos[2] = indata[10]
+        md5_bone.scale = (scale_x, scale_y, scale_z)
 
         bni_dict[md5_bone.name] = md5_bone.bone_index
 
         #w,x,y,z
-        QuartMat = Quaternion((indata[7], -indata[4], -indata[5], -indata[6])).to_matrix()
+        QuartMat = Quaternion((quat_w, quat_x, quat_y, quat_z)).to_matrix()
 
         md5_bone.bindmat = QuartMat
         md5_bone.origmat = QuartMat
-        
-        md5_bone.bindmat = Matrix.Translation(\
-                                 Vector((indata[8], indata[9], indata[10]))
-                           ) *  md5_bone.bindmat.to_4x4()
         md5_bone.quater = QuartMat.to_4x4()
+        
+        md5_bone.bindmat = Matrix.Translation( Vector((vec_x, vec_y, vec_z))
+                                             ) *  md5_bone.quater.inverted()
+                           
         md5_bones.append(md5_bone)
-        print(counter,temp_name,indata[3])
+        #print(counter, bone_name, ParentIndex)
     
     # root bone must have parent_index = 0 and selfindex = 0
-    # sounds like this code little useless, bcs only first bone can be root with this conditions
+    # sounds like this code little useless, bcs only first bone can be root(in this conditions)
     for md5_bone in md5_bones:
         if md5_bone.parent_index == 0:
             if md5_bone.bone_index == 0:
@@ -481,7 +450,7 @@ def pskimport(infile, bImportmesh, bImportbone, bDebugLogPSK, bImportmultiuvtext
     print ("-------------------------")
 
     #================================================================================================
-    #Check armature if exist if so create or update or remove all and addnew bone
+    # Blender armature
     #================================================================================================
     
     # obj = None
@@ -528,29 +497,28 @@ def pskimport(infile, bImportmesh, bImportbone, bDebugLogPSK, bImportmultiuvtext
             rotmatrix = md5_bone.bindmat.to_3x3().to_4x4()
             
             ####ROT_VARIANT_1_BEGIN
-            # tail_end_dir = rotmatrix * Vector((0,0,1))
-            # tail_end_up  = rotmatrix * Vector((0,1,0))
+            tail_end_dir = rotmatrix * Vector((0,0,1))
+            tail_end_up  = rotmatrix * Vector((0,1,0))
             ####ROT_VARIANT_1_END
             
-            ####ROT_VARIANT_2_BEGIN
-            tail_end_up  = rotmatrix * Vector((0,0,1))
-            tail_end_dir = rotmatrix * Vector((1,0,0))
+            ####ROT_VARIANT_2_BEGIN FIXME
+            # tail_end_up  = rotmatrix * Vector((0,0,1))
+            # tail_end_dir = rotmatrix * Vector((1,0,0))
             ####ROT_VARIANT_2_END
             
             tail_end_up.normalize()
             tail_end_dir.normalize()
             
             edit_bone.head = md5_bone.bindmat.translation
-            edit_bone.tail = edit_bone.head + tail_end_dir * bpy.context.scene.unrealbonesize
+            edit_bone.tail = edit_bone.head - tail_end_dir * bpy.context.scene.unrealbonesize
             
             edit_bone.align_roll(tail_end_up)
             
     #bpy.context.scene.update()
-
-    #bpy.ops.object.mode_set(mode='EDIT')
     #==================================================================================================
     #END BONE DATA BUILD
     #==================================================================================================
+    '''
     if bImportmesh:
         VtxCol = []
         bones_count = len(md5_bones)
@@ -577,14 +545,13 @@ def pskimport(infile, bImportmesh, bImportbone, bDebugLogPSK, bImportmultiuvtext
                     tmpCol[2] -= 60
             #Add the material to the mesh
             VtxCol.append(tmpCol)
-
+    '''
     #================================================================================================== 
-    # Bone Weight
+    # Influences (Bone Weight)
     #================================================================================================== 
     #read the RAWW0000 header (VRawBoneInfluence)(Weight|PntIdx|BoneIdx)
     read_chunk()
-
-    printlog("Nbr of RAWW0000 records: " + str(chunk_header_datacount) +"\n")
+    printlog_header()
 
     RWghts = [None] * chunk_header_datacount
 
@@ -596,10 +563,10 @@ def pskimport(infile, bImportmesh, bImportbone, bDebugLogPSK, bImportmultiuvtext
         RWghts[counter] = (PointIndex, BoneIndex, Weight)
         
         #print("weight:", PointIndex, BoneIndex, Weight)
-    #RWghts fields = PntIdx|BoneIdx|Weight
+
     RWghts.sort( key=lambda wgh: wgh[0])
     printlog("Vertex point and groups count =" + str(len(RWghts)) + "\n")
-    printlog("PntIdx|BoneIdx|Weight")
+    printlog("PntIdx\tBoneIdx\tWeight")
     for vg in RWghts:
         printlog(str(vg[0]) + "|" + str(vg[1]) + "|" + str(vg[2]) + "\n")
 
@@ -626,10 +593,10 @@ def pskimport(infile, bImportmesh, bImportbone, bDebugLogPSK, bImportmultiuvtext
                         TmpCol = VtxCol[RWghts[n + 1][1]]
         Tmsh.faces[x].col.append(NMesh.Col(TmpCol[0], TmpCol[1], TmpCol[2], 0))
     """
-    if (DEBUGLOG):
+    if (bDebugLogPSK):
         logf.close()
     #================================================================================================== 
-    #Building Mesh
+    # Building Mesh
     #================================================================================================== 
     if bImportmesh:
         print("vertex:", len(verts), "faces:", len(faces))
@@ -645,18 +612,10 @@ def pskimport(infile, bImportmesh, bImportbone, bDebugLogPSK, bImportmultiuvtext
             # if facesmooth[face.index] > 0:
                 # face.use_smooth = True
 
-        """
-        Material setup coding.
-        First the mesh has to be create first to get the uv texture setup working.
-        -Create material(s) list in the psk pack data from the list.(to do list)
-        -Append the material to the from create the mesh object.
-        -Create Texture(s)
-        -face loop for uv assign and assign material index
-        """
         utils_set_mode('OBJECT')
 
     #===================================================================================================
-    #UV Setup
+    # UV Setup
     #===================================================================================================
     if bImportmesh:
         print ("-------------------------")
@@ -664,11 +623,16 @@ def pskimport(infile, bImportmesh, bImportbone, bDebugLogPSK, bImportmultiuvtext
         print ("-------------------------") 
 
         if bImportmultiuvtextures:
-            for countm in range(len(materials)):
-                mesh_data.uv_textures.new(name = "psk_uv_map_multi_" + str(countm))
+            use_material_name = False
+            if len(uv_material_indexes) == len(materials):
+                use_material_name = True
+            for i in range(len(uv_material_indexes)):
+                if use_material_name:
+                    mesh_data.uv_textures.new(name = materials[i].name+".uv")
+                else:
+                    mesh_data.uv_textures.new(name = "psk_uv_map_multi_" + str(countm))
 
-            print("INIT UV TEXTURE...")
-
+            # creating different uv maps, if imported uv data have different uv_texture_id 
             _textcount = 0
             for uv in mesh_data.tessface_uv_textures: # uv texture
                 print("UV TEXTURE ID:",_textcount)
@@ -676,7 +640,7 @@ def pskimport(infile, bImportmesh, bImportbone, bDebugLogPSK, bImportmultiuvtext
                 for face in mesh_data.tessfaces:# face, uv
                     # faceuv is [] of (f_uv, MatIndex, AuxMatIndex, SmoothingGroup)
                     #                  0     1         2            3
-                    # f_uv   is       ((u,v),(u,v),(u,v))
+                    # where f_uv is   ((u,v), (u,v), (u,v))
                     if faceuv[face.index][1] == _textcount: #if face index and texture index matches assign it
                         mfaceuv = faceuv[face.index] #face index
                         #assign material to face
@@ -692,17 +656,13 @@ def pskimport(infile, bImportmesh, bImportbone, bDebugLogPSK, bImportmultiuvtext
                         uv.data[face.index].uv1 = Vector((0, 0)) #zero them 
                         uv.data[face.index].uv2 = Vector((0, 0)) #zero them 
                         uv.data[face.index].uv3 = Vector((0, 0)) #zero them 
-                    
+                
                 _textcount += 1
-
-                #for tex in mesh_data.uv_textures:
-                    #print("mesh tex:", dir(tex))
-                    #print((tex.name))
-                    
-        else: #single UV map
+            
+        else: #or make single UV map
             mesh_data.uv_textures.new(name = "psk_uv_map_single")
             uvmap =  mesh_data.tessface_uv_textures[-1]
-            print(len(uvmap.data))
+            # print(len(uvmap.data))
             for face in mesh_data.tessfaces:
                 face.material_index = faceuv[face.index][1]
                 face_uv = faceuv[face.index][0]
@@ -710,9 +670,9 @@ def pskimport(infile, bImportmesh, bImportbone, bDebugLogPSK, bImportmultiuvtext
                 uvmap.data[face.index].uv2 = Vector((face_uv[1][0], face_uv[1][1]))
                 uvmap.data[face.index].uv3 = Vector((face_uv[2][0], face_uv[2][1]))
         
-        mesh_obj = bpy.data.objects.new(gen_names['mesh_object'],mesh_data)
+        mesh_obj = bpy.data.objects.new(gen_names['mesh_object'], mesh_data)
     #===================================================================================================
-    #Mesh Vertex Group bone weight
+    # Mesh Vertex Group bone weight
     #===================================================================================================
 
     if bImportmesh:
@@ -725,7 +685,7 @@ def pskimport(infile, bImportmesh, bImportbone, bDebugLogPSK, bImportmultiuvtext
             # print(vgroup.name, ":", vgroup.index) 
             bone_index = bni_dict[vgroup.name]
             for vgp in RWghts:
-                # vgp: 0, 1, 2 (vertexId, bone index, weight)
+                # vgp: 0, 1, 2 (vertexId, bone_index, weight)
                 if vgp[1] == bone_index:
                     vgroup.add((vgp[0],), vgp[2], 'ADD')
 
@@ -766,10 +726,10 @@ class class_psa_bone:
     fcurve_quat_z = None
     fcurve_quat_w = None
     
-    def __init__(self):
-        self.name=""
-        self.Transform = None
-        self.parent = None
+    # def __init__(self):
+        # self.name=""
+        # self.Transform = None
+        # self.parent = None
 
 def psaimport(filepath, context, bFilenameAsPrefix = False, bActionsToTrack = False):
     print ("--------------------------------------------------")
@@ -802,7 +762,7 @@ def psaimport(filepath, context, bFilenameAsPrefix = False, bActionsToTrack = Fa
         logf.write(str(name) + '\n')
         if isinstance(data, bytes):
             # logf.write(str(bytes.decode(data).strip(bytes.decode(b'\x00'))))
-            logf.write( str_from_bytes_decode(data) )
+            logf.write( util_bytes_to_str(data) )
         else:
             logf.write(str(data))
         logf.write('\n')
@@ -812,7 +772,7 @@ def psaimport(filepath, context, bFilenameAsPrefix = False, bActionsToTrack = Fa
             return
         for arg in args:
             if isinstance(arg, bytes):
-                logf.write( str_from_bytes_decode(arg) + '\t')
+                logf.write( util_bytes_to_str(arg) + '\t')
             else:
                 logf.write( str(arg) + '\t' )
         logf.write('\n')
@@ -873,21 +833,22 @@ def psaimport(filepath, context, bFilenameAsPrefix = False, bActionsToTrack = Fa
     #Bones Data
     BoneIndex2NamePairMap = [None] * chunk_header_datacount
     BoneNotFoundList = []
+    BonesWithoutAnimation = []
     #unused
-    #printlog("Name|Flgs|NumChld|PrntIdx|Qx|Qy|Qz|Qw|LocX|LocY|LocZ|Length|XSize|YSize|ZSize\n")
+    #printlog("Name\tFlgs\tNumChld\tPrntIdx\tQx\tQy\tQz\tQw\tLocX\tLocY\tLocZ\tLength\tXSize\tYSize\tZSize\n")
 
     nobonematch = True
     
     for counter in range(chunk_header_datacount):
         indata = unpack_from('64s3i11f', chunk_data, chunk_header_datasize * counter)
 
-        bonename = str_from_bytes_decode(indata[0])
+        bonename = util_bytes_to_str(indata[0])
         if bonename in armature_obj.data.bones.keys():
             BoneIndex2NamePairMap[counter] = bonename
-            print('find bone', bonename)
+            #print('find bone', bonename)
             nobonematch = False
         else:
-            print('can not find the bone:', bonename)
+            print('Can not find the bone:', bonename)
             BoneNotFoundList.append(counter)
 
     if nobonematch:
@@ -895,6 +856,12 @@ def psaimport(filepath, context, bFilenameAsPrefix = False, bActionsToTrack = Fa
         if(debug):
             logf.close()
         return False
+        
+    for blender_bone_name in armature_obj.data.bones.keys():
+        if BoneIndex2NamePairMap.count(blender_bone_name) == 0:
+            BonesWithoutAnimation.append(blender_bone_name)
+            print('Bone without animation frames:',blender_bone_name)
+    
     #==============================================================================================
     # Animations (AniminfoBinary)
     #==============================================================================================
@@ -925,15 +892,15 @@ def psaimport(filepath, context, bFilenameAsPrefix = False, bActionsToTrack = Fa
                         'NumRawFrames',NumRawFrames
                        )
                        
-        action_name = str_from_bytes_decode( action_name_raw )
-        group_name  = str_from_bytes_decode( group_name_raw  )
+        action_name = util_bytes_to_str( action_name_raw )
+        group_name  = util_bytes_to_str( group_name_raw  )
 
         Raw_Key_Nums += Totalbones * NumRawFrames
         Action_List[counter] = ( action_name, group_name, Totalbones, NumRawFrames)
 
 
     #==============================================================================================
-    #Raw keys (VQuatAnimKey)
+    # Raw keys (VQuatAnimKey)
     #==============================================================================================
     read_chunk()
     write_log_plus_headers()
@@ -959,9 +926,12 @@ def psaimport(filepath, context, bFilenameAsPrefix = False, bActionsToTrack = Fa
         
         pos = Vector((vec_x, vec_y, vec_z))
         quat = Quaternion((quat_w, quat_x, quat_y, quat_z))
-        
+        # if quat_w == 0 or quat.w == 0:
+            # print(counter,'QUAT W is 0',quat_w,quat.w)
+       # print(counter,quat_w,quat)
         Raw_Key_List[counter] = (pos, quat, time_until_next)
-
+    
+    #(befzz)Documentation have nothing about this:
     #Scale keys Header, Scale keys Data, Curve keys Header, Curve keys Data
     curFilePos = psafile.tell()
     psafile.seek(0, 2)
@@ -974,7 +944,6 @@ def psaimport(filepath, context, bFilenameAsPrefix = False, bActionsToTrack = Fa
     #build the animation line
     utils_set_mode('OBJECT')
     
-    NeededBoneMatrix = {}
     '''
     if bpy.context.scene.udk_importarmatureselect:
         if len(bpy.context.scene.udkas_list) > 0:
@@ -1005,7 +974,6 @@ def psaimport(filepath, context, bFilenameAsPrefix = False, bActionsToTrack = Fa
     #print('Started for raw_action in Action_List:')
    
     raw_key_index = 0
-    object = armature_obj
     
     ###dev
     def scene_update():
@@ -1029,11 +997,11 @@ def psaimport(filepath, context, bFilenameAsPrefix = False, bActionsToTrack = Fa
     scene_update()
     
     ####ROT_VARIANT_1_BEGIN
-    # mat_pose_rot_fix = Matrix.Rotation(math.pi,4,'Y') * Matrix.Rotation(-math.pi/2,4,'X')
+    mat_pose_rot_fix =  Matrix.Rotation(-math.pi/2,4,'X')
     ####ROT_VARIANT_1_END
     
     ####ROT_VARIANT_2_BEGIN
-    mat_pose_rot_fix = Matrix.Rotation(-math.pi/2, 4, 'Z')
+    # mat_pose_rot_fix = Matrix.Rotation(-math.pi/2, 4, 'Z')
     ####ROT_VARIANT_2_END
     
     counter = 0
@@ -1061,14 +1029,16 @@ def psaimport(filepath, context, bFilenameAsPrefix = False, bActionsToTrack = Fa
         NumRawFrames = raw_action[3]
         action = bpy.data.actions.new(name = Name)
 
-        if True:
-            counter += 1
-            print("Action {0:>3d}/{1:<3d} frames: {2:>4d} {3}".format(
-                    counter, len(Action_List), NumRawFrames, Name)
-                  )
+        # force print usefull information to console(due to possible long execution)
+        counter += 1
+        print("Action {0:>3d}/{1:<3d} frames: {2:>4d} {3}".format(
+                counter, len(Action_List), NumRawFrames, Name)
+              )
                 
         #create all fcurves(for all bones) for frame
         for pose_bone in armature_obj.pose.bones:
+            if pose_bone.name in BonesWithoutAnimation:
+                continue
             psa_bone = psa_bones[pose_bone.name]
             
             data_path = pose_bone.path_from_id("rotation_quaternion")
@@ -1082,7 +1052,7 @@ def psaimport(filepath, context, bFilenameAsPrefix = False, bActionsToTrack = Fa
             psa_bone.fcurve_loc_y = action.fcurves.new(data_path, index=1)
             psa_bone.fcurve_loc_z = action.fcurves.new(data_path, index=2)
             
-        pose_bones = object.pose.bones
+        pose_bones = armature_obj.pose.bones
         for i in range(NumRawFrames):
         # for i in range(0,5):
             for j in range(Totalbones):
@@ -1163,7 +1133,7 @@ def psaimport(filepath, context, bFilenameAsPrefix = False, bActionsToTrack = Fa
             # pose_bone.rotation_quaternion = (1,0,0,0)
             # pose_bone.location = (0,0,0)
             
-        object.animation_data.action = first_action
+        armature_obj.animation_data.action = first_action
     context.scene.frame_set(0)
     ##scene_update()
     
