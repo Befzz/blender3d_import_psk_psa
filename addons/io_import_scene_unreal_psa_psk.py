@@ -84,6 +84,10 @@ class class_md5_bone:
     parent = None
     parent_name = ""
     parent_index = 0
+    __matrix_local_rot = None
+    __matrix_global_rot = None
+    __matrix_local = None
+    __matrix_global = None
     # blenderbone = None
 
     def __init__(self):
@@ -222,10 +226,8 @@ def pskimport(filepath, bImportmesh, bImportbone, bDebugLogPSK, bImportmultiuvte
         # read all chunk data
         chunk_data = pskfile.read(chunk_header_datacount * chunk_header_datasize)
 
-        
-    # accept non ".psk" extension(can by supplied by script: bpy.ops.import_scene.psk())
-    # should work good with "c:\file.some.model.psk" and "/home/xd/model.psk"
-    # remove file extension( "." with 2-5 characters after it and at end of string)
+
+    # file name w/out extension
     gen_name_part = util_gen_name_part(filepath)
     gen_names = {
         'armature_object':  gen_name_part + '.ao',
@@ -257,8 +259,10 @@ def pskimport(filepath, bImportmesh, bImportbone, bDebugLogPSK, bImportmultiuvte
         
         for counter in range( chunk_header_datacount ):
             (vec_x, vec_y, vec_z) = unpack_from('3f', chunk_data, counter * chunk_header_datasize)
+            # verts[counter]  = (vec_y, vec_x, vec_z)
+            #FFIX
             verts[counter]  = (vec_x, vec_y, vec_z)
-            
+            #EFFIX
             printlog_line(vec_x, vec_y, vec_z)
             
     #================================================================================================== 
@@ -422,16 +426,49 @@ def pskimport(filepath, bImportmesh, bImportbone, bDebugLogPSK, bImportmultiuvte
         bni_dict[md5_bone.name] = md5_bone.bone_index
 
         #w,x,y,z
-        QuartMat = Quaternion((quat_w, quat_x, quat_y, quat_z)).to_matrix()
+        # QuartMat = Quaternion((quat_w, quat_x, quat_y, quat_z)).to_matrix()
+        QuartMat = Quaternion((quat_w, quat_x, quat_y, quat_z)).conjugated().to_matrix()
 
-        md5_bone.bindmat = QuartMat
-        md5_bone.origmat = QuartMat
-        md5_bone.quater = QuartMat.to_4x4()
+        eu =  Quaternion((quat_w, quat_x, quat_y, quat_z)).to_euler()
+        rotmat = (Matrix.Rotation(eu.z, 4, 'Z')
+                    * Matrix.Rotation(eu.y, 4, 'Y')
+                    ) * Matrix.Rotation(eu.x, 4, 'X')
         
+        # md5_bone.origmat = QuartMat
+        # md5_bone.bindmat = QuartMat
+        
+        #FFIX
+        # md5_bone.quater = QuartMat.to_4x4()
+        md5_bone.quater = rotmat  
+        
+        #dev
+        # if bone_name[:5] == 'Dummy':
+            # print(bone_name, Quaternion((quat_w, quat_x, quat_y, quat_z)).to_euler())
+        
+        if md5_bone.parent_index == 0 and md5_bone.bone_index == md5_bone.parent_index:
+            matrix_local_rot = Quaternion((quat_w, quat_x, quat_y, quat_z)).to_matrix().to_4x4()
+            matrix_local = Matrix.Translation( Vector((vec_x, vec_y, vec_z))
+                                             ) *  matrix_local_rot
+        else:
+            matrix_local_rot = Quaternion((quat_w, quat_x, quat_y, quat_z)).to_matrix().to_4x4()
+            matrix_local = Matrix.Translation( Vector((vec_x, vec_y, vec_z))
+                                             ) *  matrix_local_rot.inverted()
+                                   
+        md5_bone.__matrix_local_rot = matrix_local_rot
+        md5_bone.__matrix_local = matrix_local
+        md5_bone.__matrix_global_rot = matrix_local_rot                                    
+        md5_bone.__matrix_global = matrix_local                                     
+                                             
+        # md5_bone.bindmat = Matrix.Translation( Vector((vec_x, vec_y, vec_z))
+                                             # ) *  md5_bone.quater.inverted()
+
         md5_bone.bindmat = Matrix.Translation( Vector((vec_x, vec_y, vec_z))
-                                             ) *  md5_bone.quater.inverted()
-                           
+                                             ) *  md5_bone.quater
+                                         
+        # md5_bone.bindmat = Matrix.Translation( Vector((-vec_y, vec_x, vec_z))
+                                             # ) *  md5_bone.quater
         md5_bones.append(md5_bone)
+        #print(md5_bone.name, md5_bone.quater.to_quaternion())
         #print(counter, bone_name, ParentIndex)
     
     # root bone must have parent_index = 0 and selfindex = 0
@@ -440,10 +477,30 @@ def pskimport(filepath, bImportmesh, bImportbone, bDebugLogPSK, bImportmultiuvte
         if md5_bone.parent_index == 0:
             if md5_bone.bone_index == 0:
                 md5_bone.parent = None
+                
+                # m = Matrix()
+                # m.translation = md5_bone.__matrix_global.translation 
+                #md5_bone.__matrix_global_rot = Matrix()
+                #md5_bone.__matrix_global = m
+                #md5_bone.__matrix_global_rot.invert()
+                # print( md5_bone.name,
+                        # round(math.degrees(md5_bone.__matrix_global.to_euler().x)),
+                        # round(math.degrees(md5_bone.__matrix_global.to_euler().y)),
+                        # round(math.degrees(md5_bone.__matrix_global.to_euler().z)))
                 continue
+        
+
         md5_bone.parent =  md5_bones[md5_bone.parent_index]
         md5_bone.parent_name = md5_bone.parent.name
         md5_bone.bindmat = md5_bone.parent.bindmat * md5_bone.bindmat
+        
+        matrix_global = md5_bone.parent.__matrix_global * md5_bone.__matrix_local
+        md5_bone.__matrix_global = matrix_global
+        
+        # matrix_global_rot = md5_bone.parent.__matrix_global_rot * md5_bone.__matrix_local_rot
+        matrix_global_rot = md5_bone.parent.__matrix_global_rot * md5_bone.__matrix_local_rot.inverted()
+        md5_bone.__matrix_global_rot = matrix_global_rot
+        
 
     print ("-------------------------")
     print ("----Creating--Armature---")
@@ -482,37 +539,36 @@ def pskimport(filepath, bImportmesh, bImportbone, bDebugLogPSK, bImportmultiuvte
         #Go to edit mode for the bones
         utils_set_mode('EDIT')
         
+        def GC(vec):
+            #return Vector((vec.y, -vec.x, vec.z))
+            return Vector((vec.x, vec.y, vec.z))
+        def GC2(vec):
+            #return Vector((vec.y, -vec.x, vec.z))
+            return Vector((vec.x, vec.y, vec.z))
+        
         for md5_bone in md5_bones:
             edit_bone = armature_obj.data.edit_bones.new(md5_bone.name)
             edit_bone.use_connect = False
             edit_bone.use_inherit_rotation = True
             edit_bone.use_inherit_scale = True
             edit_bone.use_local_location = True
-            # armature_obj.data.edit_bones.active = edit_bone
+            armature_obj.data.edit_bones.active = edit_bone
 
-            if not md5_bone.parent is None:
+            ##########################################################
+            joint_vector = md5_bone.__matrix_global * Vector()
+            edit_bone.head = GC2(joint_vector)
+            
+            vector_tail_end_up = md5_bone.__matrix_global_rot * Vector((0,1,0))
+            vector_tail_end_dir = md5_bone.__matrix_global_rot * Vector((1,0,0))
+            vector_tail_end_up.normalize()
+            vector_tail_end_dir.normalize()
+            edit_bone.tail = edit_bone.head \
+                    + GC2( vector_tail_end_dir * bpy.context.scene.psk_import.bonesize)
+            edit_bone.align_roll(GC2(vector_tail_end_up))
+            ###########################################################
+            
+            if md5_bone.parent is not None:
                 edit_bone.parent = armature_obj.data.edit_bones[md5_bone.parent_name]
-            
-            # rolling and directing bone
-            rotmatrix = md5_bone.bindmat.to_3x3().to_4x4()
-            
-            ####ROT_VARIANT_1_BEGIN  FIXME
-            # tail_end_up  = rotmatrix * Vector((0,0,1))
-            # tail_end_dir = rotmatrix * Vector((1,0,0))
-            ####ROT_VARIANT_1_END
-            
-            ####ROT_VARIANT_2_BEGIN #more natural
-            tail_end_dir = rotmatrix * Vector((1,0,0))
-            tail_end_up  = rotmatrix * Vector((0,1,0))
-            ####ROT_VARIANT_2_END
-            
-            tail_end_up.normalize()
-            tail_end_dir.normalize()
-            
-            edit_bone.head = md5_bone.bindmat.translation
-            edit_bone.tail = edit_bone.head + tail_end_dir * bpy.context.scene.psk_import.bonesize
-            
-            edit_bone.align_roll(tail_end_up)
             
     #bpy.context.scene.update()
     #==================================================================================================
@@ -570,11 +626,6 @@ def pskimport(filepath, bImportmesh, bImportbone, bDebugLogPSK, bImportmultiuvte
     for vg in RWghts:
         printlog(str(vg[0]) + "|" + str(vg[1]) + "|" + str(vg[2]) + "\n")
 
-    #Tmsh.update_tag()
-
-    #set the Vertex Colors of the faces
-    #face.v[n] = RWghts[0]
-    #RWghts[1] = index of VtxCol
     """
     for x in range(len(Tmsh.faces)):
         for y in range(len(Tmsh.faces[x].v)):
@@ -901,11 +952,10 @@ def psaimport(filepath, context, bFilenameAsPrefix = False, bActionsToTrack = Fa
                        )
                        
         action_name = util_bytes_to_str( action_name_raw )
-        group_name  = util_bytes_to_str( group_name_raw  )
+        group_name = util_bytes_to_str( group_name_raw  )
 
         Raw_Key_Nums += Totalbones * NumRawFrames
         Action_List[counter] = ( action_name, group_name, Totalbones, NumRawFrames)
-
 
     #==============================================================================================
     # Raw keys (VQuatAnimKey)
@@ -932,20 +982,8 @@ def psaimport(filepath, context, bFilenameAsPrefix = False, bActionsToTrack = Fa
         
         pos = Vector((vec_x, vec_y, vec_z))
         quat = Quaternion((quat_w, quat_x, quat_y, quat_z))
-        # if quat_w == 0 or quat.w == 0:
-            # print(counter,'QUAT W is 0',quat_w,quat.w)
-        # print(counter,quat_w,quat)
+
         Raw_Key_List[counter] = (pos, quat, time_until_next)
-    
-    #(befzz)Documentation have nothing about this:
-    #Scale keys Header, Scale keys Data, Curve keys Header, Curve keys Data
-    # curFilePos = psafile.tell()
-    # psafile.seek(0, 2)
-    # endFilePos = psafile.tell()
-    # if curFilePos == endFilePos:
-        # print('no Scale keys,Curve keys')
-    # else:
-        # print('== FOUND SOMETHING ==')
 
     utils_set_mode('OBJECT')
 
@@ -984,6 +1022,13 @@ def psaimport(filepath, context, bFilenameAsPrefix = False, bActionsToTrack = Fa
             if modifier.object == armature_obj:
                 armature_modifiers.append(modifier)
                 modifier.object = None
+    
+    armature_children = []
+    #unbind children (same purpose)
+    for child in armature_obj.children:
+        armature_children.append((child, child.parent_type, child.parent_bone))
+        child.parent = None
+    
     scene_update()
     
     ####ROT_VARIANT_1_BEGIN
@@ -991,8 +1036,13 @@ def psaimport(filepath, context, bFilenameAsPrefix = False, bActionsToTrack = Fa
     ####ROT_VARIANT_1_END
     
     ####ROT_VARIANT_2_BEGIN #more natural
-    mat_pose_rot_fix = Matrix.Rotation(-math.pi/2, 4, 'Z') * Matrix.Rotation(-math.pi/2,4,'Y')
+    # mat_pose_rot_fix = Matrix.Rotation(-math.pi/2, 4, 'Z') * Matrix.Rotation(-math.pi/2,4,'Y')
     ####ROT_VARIANT_2_END
+    
+    
+    ##########################################################
+    mat_pose_rot_fix = Matrix.Rotation(-math.pi/2, 4, 'Z') * Matrix.Rotation(-math.pi/2,4,'Y')
+    ##########################################################
     
     counter = 0
     gen_name_part = util_gen_name_part(filepath)
@@ -1068,15 +1118,15 @@ def psaimport(filepath, context, bFilenameAsPrefix = False, bActionsToTrack = Fa
                         rot = pbone.parent.Transform.to_quaternion() * quat_c
                         rot = rot.to_matrix().to_4x4()
                          
-                        pose_bone.matrix = Matrix.Translation(mat_view.translation)*\
-                                                     rot * mat_pose_rot_fix
+                        pose_bone.matrix = Matrix.Translation(mat_view.translation) \
+                                            * rot * mat_pose_rot_fix
                         
                         # save mat for children calc's
                         pbone.Transform = mat
                     else:
                         #TODO fix needed?
                         mat = Matrix.Translation(pos) * quat.to_matrix().to_4x4()
-                        pose_bone.matrix = mat
+                        pose_bone.matrix = mat * mat_pose_rot_fix
                         pbone.Transform = mat
                     # update(calc) data (relative coordinates /location & rotation_quaternion/)
                     #bpy.context.scene.update
@@ -1097,11 +1147,6 @@ def psaimport(filepath, context, bFilenameAsPrefix = False, bActionsToTrack = Fa
                     pbone.fcurve_loc_z.keyframe_points.insert(i,loc.z)
 
                 raw_key_index += 1
-            
-            # for bone in pose_bones:
-                #bone.matrix = psa_bones[bone.name].Transform
-                # bone.keyframe_insert("rotation_quaternion")
-                # bone.keyframe_insert("location")
                 
         if bActionsToTrack:
             if nla_track_last_frame == 0:
@@ -1115,7 +1160,6 @@ def psaimport(filepath, context, bFilenameAsPrefix = False, bActionsToTrack = Fa
             
         #break on first animation set
         # break
-    
     
     # set to rest position or set to first imported action
     if not bActionsToTrack:
@@ -1132,6 +1176,12 @@ def psaimport(filepath, context, bFilenameAsPrefix = False, bActionsToTrack = Fa
     for modifier in armature_modifiers:
         modifier.object = armature_obj
         
+    # bind children 
+    for child in armature_children:
+        (obj, p_type, p_bone) = child
+        obj.parent = armature_obj
+        obj.parent_type = p_type
+        obj.parent_bone = p_bone
     if(debug):
         logf.close()
  
@@ -1183,8 +1233,6 @@ class PskImportSharedOptions():
             )
     bonesize = FloatProperty(
             name="Bone Length",
-            # subtype='DISTANCE',
-            # unit='LENGTH',
             description="Constant length for all bones. From head to tail distance",
             default=0.5, min=0.01, max=10, step=0.1, precision=2,
             )
@@ -1221,7 +1269,7 @@ class IMPORT_OT_psk(bpy.types.Operator, PskImportSharedOptions):
             subtype='FILE_PATH',
             )
     filter_glob = StringProperty(
-            default="*.psk",
+            default="*.psk;*.pskx",
             options={'HIDDEN'},
             )
             
@@ -1309,9 +1357,9 @@ class Panel_UDKImport(bpy.types.Panel):
     bl_space_type = "VIEW_3D"
     bl_region_type = "TOOLS"
     #bl_options = {'HIDE_HEADER'}
-    filepath = StringProperty(
-            subtype='FILE_PATH',
-            )
+    # filepath = StringProperty(
+            # subtype='FILE_PATH',
+            # )
             
     # @classmethod
     # def poll(cls, context):
@@ -1333,13 +1381,10 @@ class Panel_UDKImport(bpy.types.Panel):
             split = layout.split(.75)
             split.prop(opts, "armature_selected")
             split.operator(OBJECT_OT_UDKImportArmature.bl_idname, text="", icon='FILE_REFRESH')
-            # layout.template_list("UI_UL_list", "udkimportarmature_list", context.scene, "udkimportarmature_list",
-                                 # context.scene, "udkimportarmature_list_idx", rows=5)
             layout.template_list("OBJECT_UL_armatures", "", opts, "armature_list",
                                  opts, "armature_list_idx", rows=5)
         else:
             layout.prop(opts, "armature_selected")
-        #layout.prop(opts,'armature_list_idx')
         
 class OBJECT_UL_armatures(UIList):
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
@@ -1369,7 +1414,7 @@ class OBJECT_OT_PSAPath(bpy.types.Operator):
             )
     bFilenameAsPrefix = BoolProperty(
             name="Prefix action names",
-            description="Use filename as prefix for action names.\nAsd",
+            description="Use filename as prefix for action names.",
             default=False
             )
     def execute(self, context):
@@ -1384,7 +1429,7 @@ class OBJECT_OT_PSAPath(bpy.types.Operator):
 class OBJECT_OT_UDKImportArmature(bpy.types.Operator):
     """Update armature list"""
     bl_idname = "object.udkimportarmature"
-    bl_label = ""#not visible in "<space>"
+    bl_label = "" #not visible in "<space>"
     def execute(self, context):
         my_objlist = bpy.context.scene.psk_import.armature_list
         objectl = []
