@@ -1,10 +1,17 @@
 Blender3D Import psk psa addon
 ========================
+
+NOTE: A bit better(bone orientation) skeleton import <b>with broken</b> animation support:  
+check <b>no_anim branch</b> https://github.com/Befzz/blender3d_import_psk_psa/tree/no_anim/addons
+<hr>
+
+<h5>Description</h5>
 <ul>
 <li>Mesh and skeleton from <b>.psk/.pskx</b></li>
 <li>Animation from <b>.psa</b></li>
 </ul>
-Game files can be exported to psk/psa by UModel (https://github.com/gildor2/UModel)
+Game files can be exported to psk/psa by UModel: 
+https://github.com/gildor2/UModel
 <h5>Changes from original release</h5>
 <ul>
 <li>Animation import (fixed, more test desired)</li>
@@ -13,7 +20,7 @@ Game files can be exported to psk/psa by UModel (https://github.com/gildor2/UMod
 <li>UV textures names from material names</li>
 <li>Support non .psk/.pskx/.psa file extension. Checking by file header.</li>
 <li>Option: prefix action name with filename</li>
-<li>Option: all action to NLA track, one by one</li>
+<li>Option: all actions to NLA track, one by one</li>
 <li>Option: mesh / bones or both import</li>
 <li>Option: combined or separated UV maps</li>
 </ul>
@@ -27,9 +34,6 @@ Game files can be exported to psk/psa by UModel (https://github.com/gildor2/UMod
 <li>TERA: The Exiled Realm of Arborea</li>
 <li>Alice. Madness Returns</li>
 </ul>
-<h5>TODO</h5>
-- [ ] UI Improvements
-- [ ] More test
 
 <table><tbody>
 <tr><th> Panel in 3D view </th><th> Panel in file selector for psk </th></tr>
