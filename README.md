@@ -1,9 +1,12 @@
 Blender3D Import psk psa addon
 ========================
 
-NOTE: A bit better(bone orientation) skeleton import <b>with broken</b> animation support:  
-check <b>no_anim branch</b> https://github.com/Befzz/blender3d_import_psk_psa/tree/no_anim/addons
-<hr>
+<h5>Versions</h5>
+
+. | befzz | befzz no_anim
+------------ | ------ | -------
+Animation | **Yes** | No
+Bone orientation | Bad | **Good**
 
 <h5>Description</h5>
 <ul>
@@ -14,11 +17,10 @@ Game files can be exported to psk/psa by UModel:
 https://github.com/gildor2/UModel
 <h5>Changes from original release</h5>
 <ul>
-<li>Animation import (fixed, more test desired)</li>
+<li>Animation import (fixed partially)</li>
 <li>Performance improvements</li>
 <li>Panel UI updated</li>
 <li>UV textures names from material names</li>
-<li>Support non .psk/.pskx/.psa file extension. Checking by file header.</li>
 <li>Option: prefix action name with filename</li>
 <li>Option: all actions to NLA track, one by one</li>
 <li>Option: mesh / bones or both import</li>
@@ -33,6 +35,8 @@ https://github.com/gildor2/UModel
 <ul>
 <li>TERA: The Exiled Realm of Arborea</li>
 <li>Alice. Madness Returns</li>
+<li>Life is Strange - Episode 1</li>
+<li>PUBG (Aug 2017) (.pskx mesh tested)</li>
 </ul>
 
 <table><tbody>
