@@ -1,13 +1,6 @@
 Blender3D Import psk psa addon
 ========================
 
-<h5>Versions</h5>
-
-. | befzz | befzz no_anim
------------- | ------ | -------
-Animation | **Yes** | No
-Bone orientation | Bad | **Good**
-
 <h5>Description</h5>
 <ul>
 <li>Mesh and skeleton from <b>.psk/.pskx</b></li>
@@ -15,6 +8,15 @@ Bone orientation | Bad | **Good**
 </ul>
 Game files can be exported to psk/psa by UModel: 
 https://github.com/gildor2/UModel
+
+<h5>Versions</h5>
+
+. | befzz | befzz no_anim
+------------ | ------ | -------
+Animation | **Yes** | No
+Bone orientation | Bad | **Good**
+Bone autosize | No | **Yes**
+
 <h5>Changes from original release</h5>
 <ul>
 <li>Animation import (fixed partially)</li>
@@ -26,11 +28,17 @@ https://github.com/gildor2/UModel
 <li>Option: mesh / bones or both import</li>
 <li>Option: combined or separated UV maps</li>
 </ul>
-<h5>Not supported</h5>
-<ul>
-<li>Bone scale</li>
-</ul>
-</ul>
+
+<h5>Installation</h5>
+0. Disable original addon
+
+* Copy manually
+  * Add .py files to
+  * **%APPDATA%\Blender Foundation\Blender\\** &nbsp;&nbsp;*VERSION*&nbsp;&nbsp;**\scripts\addons**
+* Install from blender
+  * **Import from File** (File -> User preferences -> Add-ons -> Install from File...)
+  * Or press space in 3D-view and enter "f ." (f,space,dot)
+
 <h5>Tested on(animation and mesh)</h5>
 <ul>
 <li>TERA: The Exiled Realm of Arborea</li>

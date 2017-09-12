@@ -1431,8 +1431,8 @@ class PskImportSharedOptions():
 
 class PskImportOptions(bpy.types.PropertyGroup, PskImportSharedOptions):
     bonesize_auto = BoolProperty(
-        name="Auto-size bones",
-        description="Bone size(length) determind by children",
+        name="Autosize bones",
+        description="Bone size(length) determind by children[s]",
         default=True,
     )
     armature_list = CollectionProperty(type=UDKImportArmaturePG)
