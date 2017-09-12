@@ -687,6 +687,23 @@ def pskimport(filepath, bImportmesh, bImportbone, bDebugLogPSK, bImportsingleuv)
         bpy.context.scene.objects.active = mesh_obj
     
         if bImportbone:
+            bone_group_unused = armature_obj.pose.bone_groups.new(
+                "Unused bones")
+            bone_group_unused.color_set = 'THEME04'
+
+            bone_group_nochild = armature_obj.pose.bone_groups.new(
+                "No children")
+            bone_group_nochild.color_set = 'THEME03'
+
+            armature_data.show_group_colors = True
+
+            for pbone in armature_obj.pose.bones:
+                if mesh_obj.vertex_groups.find(pbone.name) == -1:
+                    pbone.bone_group = bone_group_unused
+                else:
+                    if len(pbone.children) == 0:
+                        pbone.bone_group = bone_group_nochild
+                        
             armature_obj.select = True
             # parenting mesh to armature object
             mesh_obj.parent = armature_obj
@@ -1203,6 +1220,48 @@ class PskImportOptions(bpy.types.PropertyGroup, PskImportSharedOptions):
         description = "Choose Armature to Import psa animation data",
         default = False)
 
+def blen_hide_unused(armature_obj, mesh_obj):
+    def is_bone_useless(pbone):
+        is_useless = True
+        if len(pbone.children) == 0:
+            if mesh_obj.vertex_groups.get(pbone.name) != None:
+                is_useless = False
+        else:
+            for pbone_child in pbone.children:
+                is_useless = is_bone_useless(pbone_child)
+                if not is_useless:
+                    is_useless = False
+                    # break
+        # print(pbone.name, is_useless)
+        if is_useless:
+            pbone.hide = True
+        return is_useless
+
+    # print(armature_obj.data.bones[0].name)
+    is_bone_useless(armature_obj.data.bones[0])
+
+
+class ARMATURE_HIDE_UNUSED(bpy.types.Operator):
+    """Hide useless bones(no weights and no childrens)\n* Select mesh with armature modifier.\n* ALT + H to reveal (in pose mode(CTRL + TAB))"""
+    bl_idname = "armature.hide_unused"
+    bl_label = "Hide useless bones"
+    bl_options = {'UNDO'}
+
+    def execute(self, context):
+        if context.object.type == 'MESH':
+            for mod in context.object.modifiers:
+                if mod.type == 'ARMATURE' and mod.object:
+                    blen_hide_unused(
+                        context.object.modifiers[0].object, context.object)
+                else:
+
+                    util_ui_show_msg(
+                        "Can't find any situable Armature modifier for selected mesh.")
+                    print(
+                        "Can't find any situable Armature modifier for selected mesh.")
+        return {'FINISHED'}
+
+        
 class IMPORT_OT_psk(bpy.types.Operator, PskImportSharedOptions):
     """Import skeleton and/or mesh."""
     bl_idname = "import_scene.psk"
@@ -1316,6 +1375,11 @@ class Panel_UDKImport(bpy.types.Panel):
         layout.label("Mesh and skeleton:")
         layout.operator(IMPORT_OT_psk.bl_idname, icon='MESH_DATA')
         layout.prop(opts, 'import_mode',expand=True)
+        
+        sub = layout.row()
+        sub.operator(ARMATURE_HIDE_UNUSED.bl_idname, icon='BONE_DATA')
+        sub.enabled = (context.object !=
+                       None) and context.object.type == 'MESH'
         
         layout.separator()
         layout.label("Animation:")

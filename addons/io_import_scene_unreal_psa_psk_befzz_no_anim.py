@@ -1465,7 +1465,7 @@ def blen_hide_unused(armature_obj, mesh_obj):
 
 
 class ARMATURE_HIDE_UNUSED(bpy.types.Operator):
-    """Hide useless bones(no weights and no childrens)\n* Select mesh with armature modifier.\n* ALT + H to reveal."""
+    """Hide useless bones(no weights and no childrens)\n* Select mesh with armature modifier.\n* ALT + H to reveal (in pose mode(CTRL + TAB))"""
     bl_idname = "armature.hide_unused"
     bl_label = "Hide useless bones"
     bl_options = {'UNDO'}
