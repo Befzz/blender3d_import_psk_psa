@@ -17,9 +17,9 @@
 # ##### END GPL LICENSE BLOCK #####
 
 bl_info = {
-    "name": "Import Unreal Skeleton Mesh (.psk)/Animation Set (.psa)",
+    "name": "Import Unreal Skeleton Mesh (.psk)/Animation Set (.psa) (befzz)",
     "author": "Darknet, flufy3d, camg188, befzz",
-    "version": (2, 6, 2),
+    "version": (2, 6, 3),
     "blender": (2, 64, 0),
     "location": "File > Import > Skeleton Mesh (.psk)/Animation Set (.psa)",
     "description": "Import Skeleleton Mesh/Animation Data",
@@ -207,6 +207,7 @@ def pskimport(filepath, bImportmesh, bImportbone, bDebugLogPSK, bImportsingleuv)
         
         printlog_header()
 
+    isPskx = False
 
     # file name w/out extension
     gen_name_part = util_gen_name_part(filepath)
@@ -254,6 +255,11 @@ def pskimport(filepath, bImportmesh, bImportbone, bDebugLogPSK, bImportsingleuv)
     read_chunk()
     
     if bImportmesh:
+    
+        if chunk_header_datacount > 65536:  # NumVerts
+            print('Probably PSKX! %i Vertices.' % chunk_header_datacount)
+            isPskx = True
+            
         uv_material_indexes = []
         UVCoords = [None] * chunk_header_datacount
         #UVCoords record format = [pntIndx, U coord, v coord]
@@ -288,10 +294,14 @@ def pskimport(filepath, bImportmesh, bImportbone, bDebugLogPSK, bImportsingleuv)
         # smlist = []
         mat_groups = {}
         
+        unpack_format = '=HHHBBI'
+        if isPskx:
+            unpack_format = '=IIIBBI'
+            
         for counter in range(chunk_header_datacount):
             (pntIndxA, pntIndxB, pntIndxC,
              MatIndex, AuxMatIndex, SmoothingGroup
-             ) = unpack_from('hhhbbi', chunk_data, counter * chunk_header_datasize)
+             ) = unpack_from(unpack_format, chunk_data, counter * chunk_header_datasize)
              
             printlog_line(pntIndxA, pntIndxB, pntIndxC, MatIndex, AuxMatIndex, SmoothingGroup)
 
@@ -1171,7 +1181,7 @@ class PskImportSharedOptions():
     bonesize = FloatProperty(
             name="Bone length",
             description="Constant length for all bones. From head to tail distance",
-            default=0.5, min=0.01, max=10, step=0.1, precision=2,
+            default=5.0, min=0.01, max=10, step=0.1, precision=2,
             )
     single_uvtexture = BoolProperty(
             name="Single UV texture",
