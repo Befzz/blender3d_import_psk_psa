@@ -110,7 +110,7 @@ class class_md5_bone:
         # print ("blenderbone: ", self.blenderbone)
 
 
-def blen_calc_bone_orient(md5_bones, md5_bone, blen_min):
+def blen_calc_bone_orient(md5_bones, md5_bone, blen_min, bonesize_auto):
     children = []
     for bone in md5_bones:
         if bone.bone_index == 0:
@@ -123,7 +123,7 @@ def blen_calc_bone_orient(md5_bones, md5_bone, blen_min):
     if len(children) == 0:
         # print('leaf',md5_bone.vec_tail_axis)
         # Vector((0,blen,0))
-        if bpy.context.scene.psk_import.bonesize_auto:
+        if bonesize_auto:
             return md5_bone.matrix_global * (md5_bone.parent.vec_tail_axis.normalized() * blen_min)
         else:
             return md5_bone.matrix_global * md5_bone.parent.vec_tail_axis
@@ -138,7 +138,7 @@ def blen_calc_bone_orient(md5_bones, md5_bone, blen_min):
 
     # mrot = md5_bone.matrix_global.to_3x3()
 
-    if bpy.context.scene.psk_import.bonesize_auto:
+    if bonesize_auto:
         blen = vec.length
     else:
         blen = blen_min
@@ -161,7 +161,7 @@ def blen_calc_bone_orient(md5_bones, md5_bone, blen_min):
     md5_bone.vec_tail_axis = vec_ori
     # print('XXX',md5_bone.vec_tail_axis)
     return md5_bone.matrix_global * vec_ori
-    # return md5_bone.matrix_global * Vector((0,bpy.context.scene.psk_import.bonesize,0))
+    # return md5_bone.matrix_global * Vector((0,bonesize,0))
 
 
 def select_all(select):
@@ -208,7 +208,7 @@ def util_gen_name_part(filepath):
     return re.match(r'.*[/\\]([^/\\]+?)(\..{2,5})?$', filepath).group(1)
 
 
-def pskimport(filepath, bImportmesh, bImportbone, bDebugLogPSK, bImportsingleuv):
+def pskimport(filepath, bImportmesh, bImportbone, bDebugLogPSK, bImportsingleuv, bonesize, bonesize_auto):
     if not bImportbone and not bImportmesh:
         util_ui_show_msg("Nothing to do.\nSet something for import.")
         return False
@@ -616,7 +616,7 @@ def pskimport(filepath, bImportmesh, bImportbone, bDebugLogPSK, bImportsingleuv)
             # acopy = md5_bone.matrix_global #* md5_bone.quat_global.to_matrix().to_4x4()
 
             vecc = blen_calc_bone_orient(
-                md5_bones, md5_bone, bpy.context.scene.psk_import.bonesize)
+                md5_bones, md5_bone, bonesize, bonesize_auto)
 
             zvec = Vector((0, 1, 0))
 
@@ -626,7 +626,7 @@ def pskimport(filepath, bImportmesh, bImportbone, bDebugLogPSK, bImportsingleuv)
             # edit_bone['base_rotation'] = md5_bone.quat_local
             # if md5_bone.
 
-            # vecc = (md5_bone.matrix_global) * Vector((0,bpy.context.scene.psk_import.bonesize,0))
+            # vecc = (md5_bone.matrix_global) * Vector((0,bonesize,0))
             # vecc.rotate(md5_bone.quat_global)
             # if md5_bone.parent_name == 'ROOT':
             # print(md5_bone.quat_global.to_euler())
@@ -654,9 +654,9 @@ def pskimport(filepath, bImportmesh, bImportbone, bDebugLogPSK, bImportsingleuv)
             armature_obj.data.edit_bones.active = edit_bone
             
             obj = []
-            vecfix = blen_calc_bone_orient(md5_bones, md5_bone, bpy.context.scene.psk_import.bonesize, obj)
+            vecfix = blen_calc_bone_orient(md5_bones, md5_bone, bonesize, bonesize_auto)
             
-            # vecc = md5_bone.matrix_global * Vector((0,bpy.context.scene.psk_import.bonesize,0))
+            # vecc = md5_bone.matrix_global * Vector((0,bonesize,0))
             vecc = md5_bone.matrix_global.translation + obj[0]
             joint_vector.y += 40
             vecc.y += 40
@@ -900,7 +900,7 @@ class class_psa_bone:
     # quat_local = None
 
 
-def psaimport(filepath, context, bFilenameAsPrefix=False, bActionsToTrack=False):
+def psaimport(filepath, context, bFilenameAsPrefix=False, bActionsToTrack=False, bArmatureSelected = False, armatureList = [], armatureListIdx = 0):
     print("--------------------------------------------------")
     print("---------SCRIPT EXECUTING PYTHON IMPORTER---------")
     print("--------------------------------------------------")
@@ -955,11 +955,10 @@ def psaimport(filepath, context, bFilenameAsPrefix=False, bActionsToTrack=False)
 
     armature_obj = None
 
-    opts = context.scene.psk_import
-    if opts.armature_selected:
+    if bArmatureSelected:
         # use selected armature
-        if opts.armature_list:
-            armature_name = opts.armature_list[opts.armature_list_idx].name
+        if armatureList:
+            armature_name = armatureList[armatureListIdx].name
             armature_obj = bpy.data.objects.get(armature_name)
             if armature_obj is None:
                 util_ui_show_msg(
@@ -1388,12 +1387,25 @@ class MessageOperator(bpy.types.Operator):
             layout.label(line)
 
 
-def getInputFilenamepsk(self, filename, bImportmesh, bImportbone, bDebugLogPSK, bImportsingleuv):
-    return pskimport(filename, bImportmesh, bImportbone, bDebugLogPSK, bImportsingleuv)
+def getInputFilenamepsk(self, filename, bImportmesh, bImportbone, bDebugLogPSK, bImportsingleuv, bonesize, bonesize_auto):
+    return pskimport(
+        filename=filename,
+        bImportmesh=bImportmesh,
+        bImportbone=bImportbone,
+        bDebugLogPSK=bDebugLogPSK,
+        bImportsingleuv=bImportsingleuv,
+        bonesize=bonesize,
+        bonesize_auto=bonesize_auto)
 
 
-def getInputFilenamepsa(self, filename, context, _bFilenameAsPrefix, _bActionsToTrack):
-    return psaimport(filename, context, bFilenameAsPrefix=_bFilenameAsPrefix, bActionsToTrack=_bActionsToTrack)
+def getInputFilenamepsa(self, filename, context, _bFilenameAsPrefix, _bActionsToTrack, bArmatureSelected, armatureList, armatureListIdx):
+    return psaimport(filename,
+        context=context,
+        bFilenameAsPrefix=_bFilenameAsPrefix,
+        bActionsToTrack=_bActionsToTrack,
+        bArmatureSelected=bArmatureSelected,
+        armatureList=armatureList,
+        armatureListIdx=armatureListIdx)
 
 
 class UDKImportArmaturePG(bpy.types.PropertyGroup):
@@ -1532,7 +1544,9 @@ class IMPORT_OT_psk(bpy.types.Operator, PskImportSharedOptions):
         no_errors = getInputFilenamepsk(self,
                                         self.filepath,
                                         bImportmesh, bImportbone, opts.debug_log,
-                                        opts.single_uvtexture
+                                        opts.single_uvtexture,
+                                        bpy.context.scene.psk_import.bonesize,
+                                        bpy.context.scene.psk_import.bonesize_auto
                                         )
         if not no_errors:
             return {'CANCELLED'}

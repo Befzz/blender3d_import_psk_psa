@@ -133,7 +133,7 @@ def util_gen_name_part(filepath):
     '''strip path and extension from path'''
     return re.match(r'.*[/\\]([^/\\]+?)(\..{2,5})?$', filepath).group(1)
     
-def pskimport(filepath, bImportmesh, bImportbone, bDebugLogPSK, bImportsingleuv):
+def pskimport(filepath, bImportmesh, bImportbone, bDebugLogPSK, bImportsingleuv, bonesize):
     if not bImportbone and not bImportmesh:
         util_ui_show_msg("Nothing to do.\nSet something for import.")
         return False
@@ -505,7 +505,7 @@ def pskimport(filepath, bImportmesh, bImportbone, bDebugLogPSK, bImportsingleuv)
             vector_tail_end_up.normalize()
             vector_tail_end_dir.normalize()
             edit_bone.tail = edit_bone.head \
-                             + vector_tail_end_dir * bpy.context.scene.psk_import.bonesize
+                             + vector_tail_end_dir * bonesize
             edit_bone.align_roll(vector_tail_end_up)
             ###########################################################
             
@@ -732,7 +732,7 @@ class class_psa_bone:
     fcurve_quat_w = None
     prev_quat = None
 
-def psaimport(filepath, context, bFilenameAsPrefix = False, bActionsToTrack = False):
+def psaimport(filepath, context, bFilenameAsPrefix = False, bActionsToTrack = False, bArmatureSelected = False, armatureList = [], armatureListIdx = 0):
     print ("--------------------------------------------------")
     print ("---------SCRIPT EXECUTING PYTHON IMPORTER---------")
     print ("--------------------------------------------------")
@@ -787,11 +787,10 @@ def psaimport(filepath, context, bFilenameAsPrefix = False, bActionsToTrack = Fa
     
     armature_obj = None
     
-    opts = context.scene.psk_import
-    if opts.armature_selected:
+    if bArmatureSelected:
         #use selected armature
         if opts.armature_list:
-            armature_name = opts.armature_list[opts.armature_list_idx].name
+            armature_name = armatureList[armatureListIdx].name
             armature_obj = bpy.data.objects.get(armature_name)
             if armature_obj is None:
                 util_ui_show_msg("Selected armature not found: "+armature_name)
@@ -1176,11 +1175,24 @@ class MessageOperator(bpy.types.Operator):
             # row.alignment = 'LEFT'
             layout.label(line)
 
-def getInputFilenamepsk(self, filename, bImportmesh, bImportbone, bDebugLogPSK, bImportsingleuv):
-    return pskimport(         filename, bImportmesh, bImportbone, bDebugLogPSK, bImportsingleuv)
+def getInputFilenamepsk(self, filename, bImportmesh, bImportbone, bDebugLogPSK, bImportsingleuv, bonesize):
+    return pskimport(
+        filename,
+        bImportmesh,
+        bImportbone,
+        bDebugLogPSK,
+        bImportsingleuv,
+        bonesize)
 
-def getInputFilenamepsa(self, filename, context, _bFilenameAsPrefix, _bActionsToTrack):
-    return psaimport(         filename, context, bFilenameAsPrefix=_bFilenameAsPrefix, bActionsToTrack=_bActionsToTrack)
+def getInputFilenamepsa(self, filename, context, _bFilenameAsPrefix, _bActionsToTrack, bArmatureSelected, armatureList, armatureListIdx):
+    return psaimport(
+        filename=filename,
+        context=context,
+        bFilenameAsPrefix=_bFilenameAsPrefix,
+        bActionsToTrack=_bActionsToTrack,
+        bArmatureSelected=bArmatureSelected,
+        armatureList=armatureList,
+        armatureListIdx=armatureListIdx)
     
 class UDKImportArmaturePG(bpy.types.PropertyGroup):
     string = StringProperty()
@@ -1308,7 +1320,8 @@ class IMPORT_OT_psk(bpy.types.Operator, PskImportSharedOptions):
         no_errors = getInputFilenamepsk(self, 
                         self.filepath,
                         bImportmesh, bImportbone, opts.debug_log,
-                        opts.single_uvtexture
+                        opts.single_uvtexture,
+                        bpy.context.scene.psk_import.bonesize
                         )
         if not no_errors:
             return {'CANCELLED'}
@@ -1345,7 +1358,8 @@ class IMPORT_OT_psa(bpy.types.Operator):
             default=False,
             )
     def execute(self, context):
-        getInputFilenamepsa(self, self.filepath, context, self.bFilenameAsPrefix, self.bActionsToTrack)
+        opts = context.scene.psk_import
+        getInputFilenamepsa(self, self.filepath, context, self.bFilenameAsPrefix, self.bActionsToTrack, opts.armature_selected, opts.armature_list, opts.armature_list_idx)
         return {'FINISHED'}
 
     def invoke(self, context, event):
@@ -1426,7 +1440,8 @@ class OBJECT_OT_PSAPath(bpy.types.Operator):
             default=False
             )
     def execute(self, context):
-        getInputFilenamepsa(self,self.filepath,context)
+        opts = context.scene.psk_import
+        getInputFilenamepsa(self,self.filepath,context,bArmatureSelected=opts.armature_selected,armatureList=opts.armature_list,armatureListIdx=opts.armature_list_idx)
         return {'FINISHED'}
 
     def invoke(self, context, event):
