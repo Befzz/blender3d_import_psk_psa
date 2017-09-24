@@ -20,7 +20,7 @@ bl_info = {
     "name": "Import Unreal Skeleton Mesh (.psk) (no_anim)",
     # "name": "Import Unreal Skeleton Mesh (.psk)/Animation Set (.psa)",
     "author": "Darknet, flufy3d, camg188, befzz",
-    "version": (2, 6, 3),
+    "version": (2, 6, 4),
     "blender": (2, 64, 0),
     "location": "File > Import > Skeleton Mesh (.psk)/Animation Set (.psa)",
     "description": "Import Skeleleton Mesh/Animation Data",
@@ -122,7 +122,11 @@ def blen_calc_bone_orient(md5_bones, md5_bone, blen_min, bonesize_auto):
     # print(md5_bone.name, len(children))
     if len(children) == 0:
         # print('leaf',md5_bone.vec_tail_axis)
-        # Vector((0,blen,0))
+        
+        # Single bone
+        if md5_bone.parent == None:                        
+            return md5_bone.matrix_global * (md5_bone.vec_tail_axis * blen_min)
+          
         if bonesize_auto:
             return md5_bone.matrix_global * (md5_bone.parent.vec_tail_axis.normalized() * blen_min)
         else:
