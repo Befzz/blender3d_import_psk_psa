@@ -17,10 +17,10 @@
 # ##### END GPL LICENSE BLOCK #####
 
 bl_info = {
-    "name": "Import Unreal Skeleton Mesh (.psk)/Animation Set (.psa) (befzz)",
+    "name": "Import Unreal Skeleton Mesh (.psk)/Animation Set (.psa) (280)",
     "author": "Darknet, flufy3d, camg188, befzz",
-    "version": (2, 6, 3),
-    "blender": (2, 64, 0),
+    "version": (2, 6, 5),
+    "blender": (2, 80, 0),
     "location": "File > Import > Skeleton Mesh (.psk)/Animation Set (.psa)",
     "description": "Import Skeleleton Mesh/Animation Data",
     "warning": "",
@@ -132,8 +132,31 @@ def util_is_header_valid(filename, ftype, chunk_id, chunk_flag):
 def util_gen_name_part(filepath):
     '''strip path and extension from path'''
     return re.match(r'.*[/\\]([^/\\]+?)(\..{2,5})?$', filepath).group(1)
+
+
+# bl_ver_over_280 = (bpy.app.version[0]*1000 + bpy.app.version[1]) >= 2080
+if (bpy.app.version[0]*1000 + bpy.app.version[1]) >= 2080:
+
+  def context_objects_link(obj):
+    return bpy.context.scene_collection.objects.link(obj)
     
-def pskimport(filepath, bImportmesh, bImportbone, bDebugLogPSK, bImportsingleuv):
+  def context_object_select(obj, action='SELECT'):
+    return obj.select_set(action)
+    
+  def context_object_active(obj):
+    bpy.context.view_layer.objects.active = obj
+    
+else:
+  def context_objects_link(obj):
+    return bpy.context.scene.objects.link(obj)
+    
+  def context_object_select(obj, action='SELECT'):
+    obj.select = (action == 'SELECT')
+    
+  def context_object_active(obj):
+    bpy.context.scene.objects.active = obj
+
+def pskimport(filepath, bImportmesh = True, bImportbone = True, bDebugLogPSK = False, bImportsingleuv = False, fBonesize = 3.0):
     if not bImportbone and not bImportmesh:
         util_ui_show_msg("Nothing to do.\nSet something for import.")
         return False
@@ -217,18 +240,32 @@ def pskimport(filepath, bImportmesh, bImportbone, bDebugLogPSK, bImportsingleuv)
             'mesh_object':  gen_name_part + '.mo',
             'mesh_data':    gen_name_part + '.md'
     }
-    if bImportmesh:
-        mesh_data = bpy.data.meshes.new(gen_names['mesh_data'])
-        printlog("New Mesh Data = " + mesh_data.name + "\n")
-    #================================================================================================== 
-    # General
-    #================================================================================================== 
+    
+    
+    # CREATEs "collection" in a CURRENT "view layer" and make it ACTIVE
+    # TODO other way to do collection_new()
+    
+    bpy.ops.outliner.collection_new()
+    
+    obj_collection = bpy.context.view_layer.collections.active
+    
+    if obj_collection == None:
+        util_ui_show_msg("Collection was not created in a current view layer. WTF? Report!")
+        return False
+    
+    obj_collection.name = gen_name_part
+    
+    
     read_chunk()
     
     # check file header
     if not util_is_header_valid(filepath, file_ext, chunk_header_id, chunk_header_type):
         return False
 
+    if bImportmesh:
+        mesh_data = bpy.data.meshes.new(gen_names['mesh_data'])
+        printlog("New Mesh Data = " + mesh_data.name + "\n")
+        
     #================================================================================================== 
     # Points (Vertices)
     #================================================================================================== 
@@ -470,14 +507,20 @@ def pskimport(filepath, bImportmesh, bImportbone, bDebugLogPSK, bImportsingleuv)
         armature_data = bpy.data.armatures.new(gen_names['armature_data'])
         armature_obj = bpy.data.objects.new(gen_names['armature_object'], armature_data)
 
-        bpy.context.scene.objects.link(armature_obj)
+        # bpy.context.scene.objects.link(armature_obj)
+          
+        # context_objects_link(armature_obj)
+        obj_collection.collection.objects.link(armature_obj)
+          
         #bpy.ops.object.mode_set(mode='OBJECT')
 
         select_all(False)
-        armature_obj.select = True
+        
+        context_object_select(armature_obj)
         
         #set current armature to edit the bone
-        bpy.context.scene.objects.active = armature_obj
+        # context_object_active(armature_obj)
+        bpy.context.view_layer.objects.active = armature_obj
         
         # TODO: options for axes and x_ray?
         armature_data.show_axes = True
@@ -505,7 +548,7 @@ def pskimport(filepath, bImportmesh, bImportbone, bDebugLogPSK, bImportsingleuv)
             vector_tail_end_up.normalize()
             vector_tail_end_dir.normalize()
             edit_bone.tail = edit_bone.head \
-                             + vector_tail_end_dir * bpy.context.scene.psk_import.bonesize
+                             + vector_tail_end_dir * fBonesize
             edit_bone.align_roll(vector_tail_end_up)
             ###########################################################
             
@@ -609,7 +652,7 @@ def pskimport(filepath, bImportmesh, bImportbone, bDebugLogPSK, bImportsingleuv)
     #===================================================================================================
     if bImportmesh:
         if bImportsingleuv:
-            mesh_data.uv_textures.new(name = "psk_uv_map_single")
+            mesh_data.uv_layers.new(name = "psk_uv_map_single")
             uvmap =  mesh_data.tessface_uv_textures[-1]
             print("-- UV Single --\n" + uvmap.name)
             for face in mesh_data.tessfaces:
@@ -629,7 +672,7 @@ def pskimport(filepath, bImportmesh, bImportbone, bDebugLogPSK, bImportsingleuv)
                     uv_name = materials[i].name + ".uv"
                 else:
                     uv_name = "psk_uv_multi_" + str(i)
-                uv = mesh_data.uv_textures.new(name=uv_name)
+                uv = mesh_data.uv_layers.new(name=uv_name)
                 print("%i: %s" % (i, uv.name))
                 
             # creating different uv maps, if imported uv data have different uv_texture_id 
@@ -679,12 +722,17 @@ def pskimport(filepath, bImportmesh, bImportbone, bDebugLogPSK, bImportsingleuv)
 
         mesh_data.update()
         
-        bpy.context.scene.objects.link(mesh_obj)   
+        # bpy.context.scene.objects.link(mesh_obj)   
+        # context_objects_link(mesh_obj)
+        obj_collection.collection.objects.link(mesh_obj)
+        
         bpy.context.scene.update()
 
         select_all(False)
         #mesh_obj.select = True
-        bpy.context.scene.objects.active = mesh_obj
+        # bpy.context.scene.objects.active = mesh_obj
+        # context_object_active(mesh_obj)
+        bpy.context.view_layer.objects.active = mesh_obj
     
         if bImportbone:
             bone_group_unused = armature_obj.pose.bone_groups.new(
@@ -704,7 +752,9 @@ def pskimport(filepath, bImportmesh, bImportbone, bDebugLogPSK, bImportsingleuv)
                     if len(pbone.children) == 0:
                         pbone.bone_group = bone_group_nochild
                         
-            armature_obj.select = True
+            # armature_obj.select = True
+            context_object_select(armature_obj)
+            
             # parenting mesh to armature object
             mesh_obj.parent = armature_obj
             mesh_obj.parent_type = 'OBJECT'
@@ -732,7 +782,7 @@ class class_psa_bone:
     fcurve_quat_w = None
     prev_quat = None
 
-def psaimport(filepath, context, bFilenameAsPrefix = False, bActionsToTrack = False):
+def psaimport(filepath, bFilenameAsPrefix = False, bActionsToTrack = False, oArmature = None):
     print ("--------------------------------------------------")
     print ("---------SCRIPT EXECUTING PYTHON IMPORTER---------")
     print ("--------------------------------------------------")
@@ -785,30 +835,19 @@ def psaimport(filepath, context, bFilenameAsPrefix = False, bActionsToTrack = Fa
             'DataSize ', chunk_header_datasize,
             'DataCount ',chunk_header_datacount)
     
-    armature_obj = None
+    armature_obj = oArmature
     
-    opts = context.scene.psk_import
-    if opts.armature_selected:
-        #use selected armature
-        if opts.armature_list:
-            armature_name = opts.armature_list[opts.armature_list_idx].name
-            armature_obj = bpy.data.objects.get(armature_name)
-            if armature_obj is None:
-                util_ui_show_msg("Selected armature not found: "+armature_name)
-                return False
-    else:
-        #use first armature
+    if armature_obj is None:
         for obj in bpy.data.objects:
             if obj.type == 'ARMATURE':
                 armature_obj = obj
                 break
-
-    if armature_obj is None:
-        util_ui_show_msg("No armatures found.\nImport armature from psk file first.")
-        if(debug):
-            logf.close()
-        return False
-
+                
+        if armature_obj is None:        
+            util_ui_show_msg("No armatures found.\nImport armature from psk file first.")
+            if(debug):
+                logf.close()
+            return False
     chunk_header_id = None
     chunk_header_type = None
     chunk_header_datasize = None
@@ -985,7 +1024,7 @@ def psaimport(filepath, context, bFilenameAsPrefix = False, bActionsToTrack = Fa
         # pose_bone.bone.use_inherit_rotation = False
         # pose_bone.bone.use_inherit_scale = False
     
-    bpy.context.scene.objects.active = armature_obj
+    context_object_active(armature_obj)
     # armature_obj.hide = True
     # scene_update()
 
@@ -1000,10 +1039,12 @@ def psaimport(filepath, context, bFilenameAsPrefix = False, bActionsToTrack = Fa
     
     
     if bActionsToTrack:
+    
         nla_track = armature_obj.animation_data.nla_tracks.new()
         nla_track.name = gen_name_part
         nla_stripes = nla_track.strips
         nla_track_last_frame = 0
+        
     else:
         is_first_action = True
         first_action = None
@@ -1046,7 +1087,7 @@ def psaimport(filepath, context, bFilenameAsPrefix = False, bActionsToTrack = Fa
         pose_bones = armature_obj.pose.bones
         
         for i in range(NumRawFrames):
-        # for i in range(0,5):
+        # for i in range(0,15):
             for j in range(Totalbones):
                 if j not in BoneNotFoundList:
                     bName = BoneIndex2NamePairMap[j]
@@ -1117,7 +1158,7 @@ def psaimport(filepath, context, bFilenameAsPrefix = False, bActionsToTrack = Fa
             is_first_action = False
             
         #break on first animation set
-        # break
+        break
     
     # set to rest position or set to first imported action
     if not bActionsToTrack:
@@ -1126,7 +1167,7 @@ def psaimport(filepath, context, bFilenameAsPrefix = False, bActionsToTrack = Fa
             # pose_bone.location = (0,0,0)
         if not bpy.context.scene.is_nla_tweakmode:
             armature_obj.animation_data.action = first_action
-    context.scene.frame_set(0)
+    bpy.context.scene.frame_set(0)
     ##scene_update()
     
 
@@ -1142,8 +1183,9 @@ def psaimport(filepath, context, bFilenameAsPrefix = False, bActionsToTrack = Fa
         obj.parent_bone = p_bone
         
     select_all(False)
-    armature_obj.select = True
-    bpy.context.scene.objects.active = armature_obj
+    
+    context_object_select(armature_obj)
+    context_object_active(armature_obj)
     
     if(debug):
         logf.close()
@@ -1176,12 +1218,21 @@ class MessageOperator(bpy.types.Operator):
             # row.alignment = 'LEFT'
             layout.label(line)
 
-def getInputFilenamepsk(self, filename, bImportmesh, bImportbone, bDebugLogPSK, bImportsingleuv):
-    return pskimport(         filename, bImportmesh, bImportbone, bDebugLogPSK, bImportsingleuv)
+def getInputFilenamepsk(self, filename, bImportmesh, bImportbone, bDebugLogPSK, bImportsingleuv, bonesize):
+    return pskimport(         filename, bImportmesh, bImportbone, bDebugLogPSK, bImportsingleuv, bonesize)
 
-def getInputFilenamepsa(self, filename, context, _bFilenameAsPrefix, _bActionsToTrack):
-    return psaimport(         filename, context, bFilenameAsPrefix=_bFilenameAsPrefix, bActionsToTrack=_bActionsToTrack)
+def getInputFilenamepsa(self, filename, _bFilenameAsPrefix, _bActionsToTrack):
+    opts = bpy.context.scene.psk_import
+    selected_armature = None
     
+    if opts.armature_selected:
+    
+        if opts.armature_list:
+            armature_name = opts.armature_list[opts.armature_list_idx].name
+            selected_armature = bpy.data.objects.get(armature_name)
+    
+    return psaimport(         filename, bFilenameAsPrefix=_bFilenameAsPrefix, bActionsToTrack=_bActionsToTrack, oArmature = selected_armature)
+  
 class UDKImportArmaturePG(bpy.types.PropertyGroup):
     string = StringProperty()
     bones = StringProperty()
@@ -1308,7 +1359,8 @@ class IMPORT_OT_psk(bpy.types.Operator, PskImportSharedOptions):
         no_errors = getInputFilenamepsk(self, 
                         self.filepath,
                         bImportmesh, bImportbone, opts.debug_log,
-                        opts.single_uvtexture
+                        opts.single_uvtexture,
+                        opts.bonesize
                         )
         if not no_errors:
             return {'CANCELLED'}
@@ -1345,7 +1397,7 @@ class IMPORT_OT_psa(bpy.types.Operator):
             default=False,
             )
     def execute(self, context):
-        getInputFilenamepsa(self, self.filepath, context, self.bFilenameAsPrefix, self.bActionsToTrack)
+        getInputFilenamepsa(self, self.filepath, self.bFilenameAsPrefix, self.bActionsToTrack)
         return {'FINISHED'}
 
     def invoke(self, context, event):
@@ -1426,7 +1478,7 @@ class OBJECT_OT_PSAPath(bpy.types.Operator):
             default=False
             )
     def execute(self, context):
-        getInputFilenamepsa(self,self.filepath,context)
+        getInputFilenamepsa(self, self.filepath)
         return {'FINISHED'}
 
     def invoke(self, context, event):
