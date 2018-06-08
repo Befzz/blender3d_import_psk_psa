@@ -309,15 +309,15 @@ def pskimport(filepath, bImportmesh = True, bImportbone = True, bDebugLogPSK = F
     # CREATEs "collection" in a CURRENT "view layer" and make it ACTIVE
     # TODO other way to do collection_new()
     
-    bpy.ops.outliner.collection_new()
+    # bpy.ops.outliner.collection_new()
     
     obj_collection = bpy.context.view_layer.collections.active
     
-    if obj_collection == None:
-        util_ui_show_msg("Collection was not created in a current view layer. WTF? Report!")
-        return False
+    # if obj_collection == None:
+        # util_ui_show_msg("Collection was not created in a current view layer. WTF? Report!")
+        # return False
     
-    obj_collection.name = gen_name_part
+    # obj_collection.name = gen_name_part
     
     if bImportmesh:
         mesh_data = bpy.data.meshes.new(gen_names['mesh_data'])

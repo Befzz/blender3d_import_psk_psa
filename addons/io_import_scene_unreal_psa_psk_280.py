@@ -245,15 +245,15 @@ def pskimport(filepath, bImportmesh = True, bImportbone = True, bDebugLogPSK = F
     # CREATEs "collection" in a CURRENT "view layer" and make it ACTIVE
     # TODO other way to do collection_new()
     
-    bpy.ops.outliner.collection_new()
+    # bpy.ops.outliner.collection_new()
     
     obj_collection = bpy.context.view_layer.collections.active
     
-    if obj_collection == None:
-        util_ui_show_msg("Collection was not created in a current view layer. WTF? Report!")
-        return False
+    # if obj_collection == None:
+        # util_ui_show_msg("Collection was not created in a current view layer. WTF? Report!")
+        # return False
     
-    obj_collection.name = gen_name_part
+    # obj_collection.name = gen_name_part
     
     
     read_chunk()
@@ -888,18 +888,35 @@ def psaimport(filepath, bFilenameAsPrefix = False, bActionsToTrack = False, oArm
 
     nobonematch = True
     
+    
+    # for case insensetive comparison
+    # key = lowered name
+    # value = orignal name
+    skeleton_bones_lowered = {}
+    
+    for blender_bone_name in armature_obj.data.bones.keys():
+      skeleton_bones_lowered[blender_bone_name.lower()] = blender_bone_name
+      
     for counter in range(chunk_header_datacount):
         indata = unpack_from('64s3i11f', chunk_data, chunk_header_datasize * counter)
 
         bonename = util_bytes_to_str(indata[0])
-        if bonename in armature_obj.data.bones.keys():
-            BoneIndex2NamePairMap[counter] = bonename
+        # bonename = util_bytes_to_str(indata[0]).upper()
+        
+        # if bonename in armature_obj.data.bones.keys():
+        lowered = bonename.lower()
+        if lowered in skeleton_bones_lowered:
+            # BoneIndex2NamePairMap[counter] = bonename
+            
+            # use a skeleton bone name 
+            BoneIndex2NamePairMap[counter] = skeleton_bones_lowered[lowered]
             #print('find bone', bonename)
             nobonematch = False
+            
         else:
             print('Can not find the bone:', bonename)
             BoneNotFoundList.append(counter)
-
+            
     if nobonematch:
         util_ui_show_msg('No bone was match!\nSkip import!')
         if(debug):
