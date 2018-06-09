@@ -788,14 +788,22 @@ def psaimport(filepath, bFilenameAsPrefix = False, bActionsToTrack = False, oArm
     armature_obj = oArmature
     
     if armature_obj is None:
-    
-        for obj in bpy.data.objects:
+        for obj in bpy.context.selected_objects:
             if obj.type == 'ARMATURE':
                 armature_obj = obj
                 break
                 
-        if armature_obj is None:        
-            util_ui_show_msg("No armatures found.\nImport armature from psk file first.")
+        if armature_obj is None:  
+          for obj in bpy.context.selected_objects:
+            if obj.type == 'MESH':
+              for modifier in obj.modifiers:
+                if modifier.type == 'ARMATURE':
+                  armature_obj = modifier.object
+                  break
+                  
+                  
+        if armature_obj is None:  
+            util_ui_show_msg("No armature selected.")
             if(debug):
                 logf.close()
             return False
@@ -1159,51 +1167,54 @@ def psaimport(filepath, bFilenameAsPrefix = False, bActionsToTrack = False, oArm
     print('Done.')
  
 class MessageOperator(bpy.types.Operator):
-    bl_idname = "error.message_popup"
-    bl_label = ""
+    bl_idname = "pskpsamessage"
+    bl_label = "PSA/PSK"
+    bl_options = {'REGISTER', 'INTERNAL'}
 
     message = StringProperty(default='Message')
     lines = []
+    line0 = None
     def execute(self, context):
         self.lines = self.message.split("\n")
         maxlen = 0
         for line in self.lines:
             if len(line) > maxlen:
                 maxlen = len(line)
-            print(line)
-        # self.lines.append("")
-        wm = context.window_manager
-        return wm.invoke_popup(self, width=30 + 6*maxlen, height=400)
-
+                
+        print(self.message)
+            
+        self.report({'WARNING'}, self.message)
+        return {'FINISHED'}
+        
+    def invoke(self, context, event):
+        self.lines = self.message.split("\n")
+        maxlen = 0
+        for line in self.lines:
+            if len(line) > maxlen:
+                maxlen = len(line)
+                
+        self.line0 = self.lines.pop(0)
+        
+        return context.window_manager.invoke_props_dialog(self, width=100 + 6*maxlen)
+      
+    def cancel(self, context):
+        # print('cancel')
+        self.execute(self)
+        
     def draw(self, context):
         layout = self.layout
-        layout.label("[PSA/PSK Importer]", icon='ANIM')
+        sub = layout.column()
+        sub.label(self.line0, icon='ERROR')
 
         for line in self.lines:
-            # row = self.layout.row(align=True)
-            # row.alignment = 'LEFT'
-            layout.label(line)
+            sub.label(line)
 
 def getInputFilenamepsk(self, filename, bImportmesh, bImportbone, bDebugLogPSK, bImportsingleuv, fBonesize):
     return pskimport(         filename, bImportmesh, bImportbone, bDebugLogPSK, bImportsingleuv, fBonesize)
 
 def getInputFilenamepsa(self, filename, _bFilenameAsPrefix, _bActionsToTrack):
-
-    opts = bpy.context.scene.psk_import
-    selected_armature = None
+    return psaimport(         filename, bFilenameAsPrefix=_bFilenameAsPrefix, bActionsToTrack=_bActionsToTrack, oArmature = None)
     
-    if opts.armature_selected:
-    
-        if opts.armature_list:
-            armature_name = opts.armature_list[opts.armature_list_idx].name
-            selected_armature = bpy.data.objects.get(armature_name)
-    
-    return psaimport(         filename, bFilenameAsPrefix=_bFilenameAsPrefix, bActionsToTrack=_bActionsToTrack, oArmature = selected_armature)
-    
-class UDKImportArmaturePG(bpy.types.PropertyGroup):
-    string = StringProperty()
-    bones = StringProperty()
-    have_animation = BoolProperty(default=False)
  
 #properties for panels, and Operator.
 class PskImportSharedOptions():
@@ -1231,12 +1242,7 @@ class PskImportSharedOptions():
             )
    
 class PskImportOptions(bpy.types.PropertyGroup, PskImportSharedOptions):
-    armature_list = CollectionProperty(type=UDKImportArmaturePG)
-    armature_list_idx = IntProperty()
-    armature_selected = BoolProperty(
-        name = "Armature Selected",
-        description = "Choose Armature to Import psa animation data",
-        default = False)
+    None
 
 def blen_hide_unused(armature_obj, mesh_obj):
     def is_bone_useless(pbone):
@@ -1340,7 +1346,7 @@ class IMPORT_OT_psk(bpy.types.Operator, PskImportSharedOptions):
         return {'RUNNING_MODAL'}
 
 class IMPORT_OT_psa(bpy.types.Operator):
-    '''Load a skeleton anim psa File'''
+    '''Load a skeleton animation from .psa\n * Selected armature will be used.'''
     bl_idname = "import_scene.psa"
     bl_label = "Import PSA"
     bl_space_type = "PROPERTIES"
@@ -1403,25 +1409,6 @@ class Panel_UDKImport(bpy.types.Panel):
         layout.separator()
         layout.label("Animation:")
         layout.operator(IMPORT_OT_psa.bl_idname, icon='ANIM')
-        
-        if opts.armature_selected:
-            split = layout.split(.75)
-            split.prop(opts, "armature_selected")
-            split.operator(OBJECT_OT_UDKImportArmature.bl_idname, text="", icon='FILE_REFRESH')
-            layout.template_list("OBJECT_UL_armatures", "", opts, "armature_list",
-                                 opts, "armature_list_idx", rows=5)
-        else:
-            layout.prop(opts, "armature_selected")
-        
-class OBJECT_UL_armatures(UIList):
-    def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
-        split = layout.split(0.75)
-        if item.have_animation:
-            split.label(str(item.name),icon='ANIM')
-        else:
-            split.label("     "+str(item.name))
-        #split.prop(item, "bones", text="", emboss=False, translate=False, icon='BONE_DATA')
-        split.label(str(item.bones),icon='BONE_DATA')
 
         
 class OBJECT_OT_PSAPath(bpy.types.Operator):
@@ -1452,34 +1439,6 @@ class OBJECT_OT_PSAPath(bpy.types.Operator):
         bpy.context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
 
-class OBJECT_OT_UDKImportArmature(bpy.types.Operator):
-    """Update armature list"""
-    bl_idname = "object.udkimportarmature"
-    bl_label = "" #not visible in "<space>"
-    def execute(self, context):
-        my_objlist = bpy.context.scene.psk_import.armature_list
-        objectl = []
-        
-        #clear list
-        for _obj in my_objlist:
-            my_objlist.remove(0)
-            
-        #fill list
-        for obj in bpy.context.scene.objects:
-            if obj.type == 'ARMATURE':
-                list_item = my_objlist.add()
-                list_item.name = obj.name
-                list_item.bones = str(len(obj.data.bones))
-                
-                # if obj have assigned action or any NLA tracks, mark it
-                if obj.animation_data\
-                        and (obj.animation_data.action 
-                             or obj.animation_data.nla_tracks):
-                    list_item.have_animation = True
-                else:
-                    list_item.have_animation = False
-                
-        return{'FINISHED'}
     
 def menu_func(self, context):
     self.layout.operator(IMPORT_OT_psk.bl_idname, text="Skeleton Mesh (.psk)")

@@ -838,16 +838,26 @@ def psaimport(filepath, bFilenameAsPrefix = False, bActionsToTrack = False, oArm
     armature_obj = oArmature
     
     if armature_obj is None:
-        for obj in bpy.data.objects:
+        for obj in bpy.context.selected_objects:
             if obj.type == 'ARMATURE':
                 armature_obj = obj
                 break
                 
-        if armature_obj is None:        
-            util_ui_show_msg("No armatures found.\nImport armature from psk file first.")
+        if armature_obj is None:  
+          for obj in bpy.context.selected_objects:
+            if obj.type == 'MESH':
+              for modifier in obj.modifiers:
+                if modifier.type == 'ARMATURE':
+                  armature_obj = modifier.object
+                  break
+                  
+                  
+        if armature_obj is None:  
+            util_ui_show_msg("No armature selected.")
             if(debug):
                 logf.close()
             return False
+    
     chunk_header_id = None
     chunk_header_type = None
     chunk_header_datasize = None
