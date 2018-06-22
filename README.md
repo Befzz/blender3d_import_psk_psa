@@ -3,7 +3,7 @@ Blender3D Import psk psa addon
 
 <h5>Description</h5>
 <ul>
-<li>This is an edited version of original blender plugin (https://wiki.blender.org/index.php/Extensions:2.6/Py/Scripts/Import-Export/Unreal_psk_psa)
+<li>This is an edited version of the original blender plugin (https://wiki.blender.org/index.php/Extensions:2.6/Py/Scripts/Import-Export/Unreal_psk_psa)
 <li>Mesh and skeleton from <b>.psk/.pskx</b></li>
 <li>Animation from <b>.psa</b></li>
 </ul>
@@ -14,16 +14,16 @@ https://github.com/gildor2/UModel
 
 . | 270 | no_anim
 ------------ | ------ | -------
-Animation | Bad | -
-Bone orientation | Bad | Axis based
-Bone autosize | - | Yes
+Animation | Yes | -
+Bone orientation | Good | ok
+Bone autosize | Yes | Yes
 
 <h5>Changes from original release</h5>
 <ul>
-<li>Partially fixed animation import</li>
+<li>Fixed animation import</li>
+<li>Fixed skeleton import</li>
 <li>Performance improvements</li>
 <li>Panel UI updated</li>
-<li>UV textures names from material names</li>
 <li>UI option: prefix action name with filename</li>
 <li>UI option: all actions to NLA track, one by one</li>
 <li>UI option: mesh / bones or both import</li>
@@ -50,6 +50,7 @@ Disable original addon.
 <li>Alice. Madness Returns</li>
 <li>Life is Strange - Episode 1</li>
 <li>PUBG (Aug 2017) (.pskx mesh tested)</li>
+<li>Fornite (2018)</li>
 </ul>
 
 <table><tbody>
