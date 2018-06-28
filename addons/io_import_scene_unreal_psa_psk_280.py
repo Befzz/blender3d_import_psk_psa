@@ -84,22 +84,25 @@ v = bpy.app.version
 is_blen_280 = (v[0]*1000000 + v[1]*1000 + v[2]) >= 2080017
 
 if is_blen_280:
-    def util_obj_link(obj):
+    def util_obj_link(context, obj):
         # return bpy.context.scene_collection.objects.link(obj)
         # bpy.context.view_layer.collections[0].collection.objects.link(obj)
         # return bpy.context.collection.objects.link(obj)
-        bpy.data.scenes[0].collection.objects.link(obj)
+        # bpy.data.scenes[0].collection.objects.link(obj)
+        context.collection.objects.link(obj)
 
-    def util_obj_select(obj, action = 'SELECT'):
-          if obj.name in bpy.data.scenes[0].view_layers[0].objects:
+    def util_obj_select(context, obj, action = 'SELECT'):
+          # if obj.name in bpy.data.scenes[0].view_layers[0].objects:
+          if obj.name in context.view_layer.objects:
               return obj.select_set(action)
 
-    def util_obj_set_active(obj):
+    def util_obj_set_active(context, obj):
         # bpy.context.view_layer.objects.active = obj
-        bpy.data.scenes[0].view_layers[0].objects.active = obj
+        # bpy.data.scenes[0].view_layers[0].objects.active = obj
+        context.view_layer.objects.active = obj
 
-    def util_get_scene():
-        return bpy.data.scenes[0]
+    def util_get_scene(context):
+        return context.scene
 
     def get_uv_layers(mesh_obj):
         return mesh_obj.uv_layers
@@ -107,19 +110,19 @@ if is_blen_280:
     def obj_select_get(obj):
         return obj.select_get()
 else:
-    def util_obj_link(obj):
+    def util_obj_link(context, obj):
         bpy.context.scene.objects.link(obj)
 
-    def util_obj_select(obj, action = 'SELECT'):
+    def util_obj_select(context, obj, action = 'SELECT'):
         obj.select = (action == 'SELECT')
 
-    def util_obj_set_active(obj):
+    def util_obj_set_active(context, obj):
         bpy.context.scene.objects.active = obj
 
     def get_uv_layers(mesh_obj):
         return mesh_obj.uv_textures
       
-    def util_get_scene():
+    def util_get_scene(context):
         return bpy.context.scene
         
     def obj_select_get(obj):
@@ -296,6 +299,7 @@ def util_check_file_header(file, ftype):
         
     
 def pskimport(filepath,
+        context = bpy.context,
         bImportmesh = True,
         bImportbone = True,
         bSpltiUVdata = False,
@@ -717,11 +721,11 @@ def pskimport(filepath,
         armature_data.draw_type = 'STICK'
         armature_obj.show_x_ray = True
 
-        util_obj_link(armature_obj)
+        util_obj_link(context, armature_obj)
 
         util_select_all(False)
-        util_obj_select(armature_obj)
-        util_obj_set_active(armature_obj)
+        util_obj_select(context, armature_obj)
+        util_obj_set_active(context, armature_obj)
         
         utils_set_mode('EDIT')
         
@@ -963,18 +967,18 @@ def pskimport(filepath,
     
     if bImportmesh:
     
-        util_obj_link(mesh_obj)
+        util_obj_link(context, mesh_obj)
         util_select_all(False)
         
             
         if not bImportbone:   
         
-            util_obj_select(mesh_obj)
-            util_obj_set_active(mesh_obj)
+            util_obj_select(context, mesh_obj)
+            util_obj_set_active(context, mesh_obj)
             
         else:
             # select_all(False)
-            util_obj_select(armature_obj)
+            util_obj_select(context, armature_obj)
             
             # parenting mesh to armature object
             mesh_obj.parent = armature_obj
@@ -989,8 +993,8 @@ def pskimport(filepath,
             
             # utils_set_mode('OBJECT')
             # select_all(False)
-            util_obj_select(armature_obj)
-            util_obj_set_active(armature_obj)
+            util_obj_select(context, armature_obj)
+            util_obj_set_active(context, armature_obj)
     
     # print("Done: %f sec." % (time.process_time() - ref_time))
     utils_set_mode('OBJECT')
@@ -1036,8 +1040,16 @@ def blen_get_armature_from_selection():
   return armature_obj
   
     
-def psaimport(filepath, oArmature = None, bFilenameAsPrefix = False, bActionsToTrack = False,  
-              first_frames = 0, bDontInvertRoot = False, fcurve_interpolation = 'LINEAR', error_callback = __pass):
+def psaimport(filepath,
+        context = bpy.context,
+        oArmature = None,
+        bFilenameAsPrefix = False,
+        bActionsToTrack = False,  
+        first_frames = 0, 
+        bDontInvertRoot = False, 
+        fcurve_interpolation = 'LINEAR', 
+        error_callback = __pass
+        ):
     """Import animation data from 'filepath' using 'oArmature'
     
     Args:
@@ -1242,7 +1254,7 @@ def psaimport(filepath, oArmature = None, bFilenameAsPrefix = False, bActionsToT
     # index of current frame in raw input data
     raw_key_index = 0
     
-    util_obj_set_active(armature_obj)
+    util_obj_set_active(context, armature_obj)
     
     gen_name_part = util_gen_name_part(filepath)
     
@@ -1411,15 +1423,15 @@ def psaimport(filepath, oArmature = None, bFilenameAsPrefix = False, bActionsToT
         # break on first animation set
         # break
         
-    scene = util_get_scene()
+    scene = util_get_scene(context)
     
     if not bActionsToTrack:
         if not scene.is_nla_tweakmode:
             armature_obj.animation_data.action = first_action
             
     util_select_all(False)
-    util_obj_select(armature_obj)
-    util_obj_set_active(armature_obj)
+    util_obj_select(context, armature_obj)
+    util_obj_set_active(context, armature_obj)
     
     # 2.8 crashes
     if not is_blen_280:
@@ -1639,6 +1651,7 @@ class IMPORT_OT_psk(bpy.types.Operator, ImportProps):
         
         no_errors = pskimport( 
                         self.filepath,
+                        context = context,
                         bImportmesh = bImportmesh, bImportbone = bImportbone,
                         fBonesize = props.fBonesize,
                         fBonesizeRatio = props.fBonesizeRatio,
@@ -1682,6 +1695,7 @@ class IMPORT_OT_psa(bpy.types.Operator, ImportProps):
     def execute(self, context):
         props = context.scene.pskpsa_import
         psaimport(self.filepath,
+            context = context,
             bFilenameAsPrefix = props.bFilenameAsPrefix, 
             bActionsToTrack = props.bActionsToTrack, 
             oArmature = blen_get_armature_from_selection(),
