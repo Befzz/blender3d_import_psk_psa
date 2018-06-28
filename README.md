@@ -1,30 +1,30 @@
 Blender3D Import psk psa addon
 ========================
-
-<h5>Description</h5>
 <ul>
-<li>This is an edited version of original blender plugin: https://wiki.blender.org/index.php/Extensions:2.6/Py/Scripts/Import-Export/Unreal_psk_psa
-<li>Mesh and skeleton from <b>.psk/.pskx</b></li>
-<li>Animation from <b>.psa</b></li>
-<li><b>Version 280</b>:<br/>
-Blender 2.80+ support (100% will broke again :smile: )<br/>
-Animation + bone orientation fixed.<br/>
-A part of code has been revised
+<li>This is an heavily edited version of original blender plugin: https://wiki.blender.org/index.php/Extensions:2.6/Py/Scripts/Import-Export/Unreal_psk_psa
+<li>Import mesh and skeleton from <b>.psk/.pskx</b></li>
+<li>Import animation from <b>.psa</b></li>
+<li>Game files can be exported to psk/psa by UModel: 
+https://github.com/gildor2/UModel</li>
 </ul>
-Game files can be exported to psk/psa by UModel: 
-https://github.com/gildor2/UModel
+<h4>Version 280</h4>
 
-<h5>Versions</h5>
+ * Blender 2.80+ support (experimental).
+ * Animation + bone orientation fixed.
+ * A part of code has been revised.
+
+
+<h3>Versions</h3>
 
 . | befzz | no_anim | 280
 ------------ | ------ | ------- | --
-Animation | Bad | - | Yes
-Bone orientation | Bad | Axis based | Axis + Direct
-Bone autosize | - | Yes | Yes
+Animation | Bad | - | **Yes**
+Bone orientation | Bad | Axis based | **Axis + Direct**
+Bone autosize | - | Yes | **Yes**
 
 <h5>Changes from original release</h5>
 <ul>
-<li>Partially fixed animation import</li>
+<li>Fixed animation/skeleton import(280 version)</li>
 <li>Performance improvements</li>
 <li>Panel UI updated</li>
 <li>UI option: prefix action name with filename</li>
@@ -33,13 +33,13 @@ Bone autosize | - | Yes | Yes
 <li>UI option: combined or separated UV maps</li>
 </ul>
 
-<h5>Installation</h5>
+<h3>Installation</h3>
 Disable original addon.
 
 * Manually  
 
     Add .py files to  
-   *%APPDATA%\Blender Foundation\Blender\\* &nbsp;&nbsp;*VERSION*&nbsp;&nbsp;*\scripts\addons** 
+   *%APPDATA%\Blender Foundation\Blender\\* &nbsp;&nbsp; *VERSION* &nbsp;&nbsp; *\scripts\addons* 
   
 * From blender  
  
