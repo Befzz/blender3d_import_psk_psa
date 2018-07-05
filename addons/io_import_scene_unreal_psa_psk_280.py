@@ -1752,21 +1752,35 @@ class PSKPSA_import_panel(bpy.types.Panel, ImportProps):
         self.draw_psa(context)
 
     
-def menu_func(self, context):
+def menu_import_draw(self, context):
     self.layout.operator(IMPORT_OT_psk.bl_idname, text = "Skeleton Mesh (.psk)")
     self.layout.operator(IMPORT_OT_psa.bl_idname, text = "Skeleton Anim (.psa)")
+
+classes = (
+        IMPORT_OT_psk,
+        IMPORT_OT_psa,
+        PskImportOptions,
+        PSKPSA_import_panel,
+        PSKPSA_OT_show_message,
+        PSKPSA_OT_hide_unused_bones
+    )
     
     
 def register():
-    # print('register?')
-    bpy.utils.register_module(__name__)
-    bpy.types.INFO_MT_file_import.append(menu_func)
+    from bpy.utils import register_class
+    for cls in classes:
+        register_class(cls)
+        
+    bpy.types.INFO_MT_file_import.append(menu_import_draw)
     
     bpy.types.Scene.pskpsa_import = PointerProperty(type = PskImportOptions)
     
 def unregister():
-    bpy.utils.unregister_module(__name__)
-    bpy.types.INFO_MT_file_import.remove(menu_func)
+    from bpy.utils import unregister_class
+    for cls in classes:
+        unregister_class(cls)
+        
+    bpy.types.INFO_MT_file_import.remove(menu_import_draw)
     
     del bpy.types.Scene.pskpsa_import
     
