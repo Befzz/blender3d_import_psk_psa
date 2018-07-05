@@ -19,8 +19,8 @@
 bl_info = {
     "name": "Import Unreal Skeleton Mesh (.psk)/Animation Set (.psa) (280)",
     "author": "Darknet, flufy3d, camg188, befzz",
-    "version": (2, 7, 2),
-    "blender": (2, 64, 0),
+    "version": (2, 7, 3),
+    "blender": (2, 80, 0),
     "location": "File > Import > Skeleton Mesh (.psk)/Animation Set (.psa) OR View3D > Tool Shelf (key T) > Misc. tab",
     "description": "Import Skeleton Mesh / Animation Data",
     "warning": "",
@@ -69,8 +69,6 @@ from bpy.props import (FloatProperty,
                         PointerProperty )
                       
 from struct import unpack, unpack_from, Struct
-
-# import struct
 import time
 
 #DEV
@@ -110,6 +108,10 @@ if is_blen_280:
     def obj_select_get(obj):
         return obj.select_get()
 else:
+    # Suppress the warning in older versions:
+    #   "Warning: This script was written Blender version 2.80.0 and might not function (correctly), though it is enabled"
+    bl_info['blender'] = (2,64,0)
+    
     def util_obj_link(context, obj):
         bpy.context.scene.objects.link(obj)
 
