@@ -1440,7 +1440,6 @@ def psaimport(filepath,
             scene.frame_end = sum(frames for _, _, _, frames in Action_List)
         else:
             scene.frame_end = max(frames for _, _, _, frames in Action_List)
-        print(bLoopingAnim)
         if bLoopingAnim:
             scene.frame_end -= 2
 
