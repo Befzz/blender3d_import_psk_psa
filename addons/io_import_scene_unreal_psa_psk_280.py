@@ -1436,9 +1436,9 @@ def psaimport(filepath,
         scene.frame_start = 0
 
         if bActionsToTrack:
-            scene.frame_end = sum(frames for _, _, _, frames in Action_List)
+            scene.frame_end = sum(frames for _, _, _, frames in Action_List) - 1
         else:
-            scene.frame_end = max(frames for _, _, _, frames in Action_List)
+            scene.frame_end = max(frames for _, _, _, frames in Action_List) - 1
 
 
     util_select_all(False)
