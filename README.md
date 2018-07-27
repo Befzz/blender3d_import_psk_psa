@@ -20,19 +20,25 @@ https://github.com/gildor2/UModel</li>
 
 <h3>Installation</h3>  
 
-Disable original addon.
+0. Download .py file ( <a href ="https://github.com/Befzz/blender3d_import_psk_psa/raw/master/addons/io_import_scene_unreal_psa_psk_280.py">direct link</a> )  
+
+1. Add add-on:
+
+* From Blender  
+ 
+  2.79: File -> User preferences -> Add-ons -> Install Add-on from File...  
+  2.80: Edit -> User preferences -> Add-ons -> Install Add-on from File...
 
 * Manually  
 
     Add .py file to the Blender's Add-ons search path:  
     * %APPDATA%\Blender Foundation\Blender\2.79\scripts\addons\  
     * %APPDATA%\Blender Foundation\Blender\2.80\scripts\addons\
-  
-* From Blender  
- 
-  2.79: File -> User preferences -> Add-ons -> Install Add-on from File...  
-  2.80: Edit -> User preferences -> Add-ons -> Install Add-on from File...
-
+    
+2. Disable original add-on:  
+`Import Unreal Skeleton Mesh (.psk)/Animation Set (.psa)`
+3. Enable this one:  
+`Import Unreal Skeleton Mesh (.psk)/Animation Set (.psa) (280)`
 <h3>Usage</h3>  
 
 1. In 3DView, press **T** (Toggle Toolbar)  
