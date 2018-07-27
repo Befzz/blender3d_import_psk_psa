@@ -19,15 +19,14 @@
 bl_info = {
     "name": "Import Unreal Skeleton Mesh (.psk)/Animation Set (.psa) (280)",
     "author": "Darknet, flufy3d, camg188, befzz",
-    "version": (2, 7, 3),
+    "version": (2, 7, 4),
     "blender": (2, 80, 0),
     "location": "File > Import > Skeleton Mesh (.psk)/Animation Set (.psa) OR View3D > Tool Shelf (key T) > Misc. tab",
     "description": "Import Skeleton Mesh / Animation Data",
     "warning": "",
-    "wiki_url": "http://wiki.blender.org/index.php/Extensions:2.5/Py/"
-                "Scripts/Import-Export/Unreal_psk_psa",
+    "wiki_url": "https://github.com/Befzz/blender3d_import_psk_psa",
     "category": "Import-Export",
-    "tracker_url": "https://github.com/Befzz/blender3d_import_psk_psa"
+    "tracker_url": "https://github.com/Befzz/blender3d_import_psk_psa/issues"
 }
 
 """
@@ -1046,10 +1045,11 @@ def psaimport(filepath,
         context = bpy.context,
         oArmature = None,
         bFilenameAsPrefix = False,
-        bActionsToTrack = False,  
-        first_frames = 0, 
-        bDontInvertRoot = False, 
-        fcurve_interpolation = 'LINEAR', 
+        bActionsToTrack = False,
+        first_frames = 0,
+        bDontInvertRoot = False,
+        bUpdateTimelineRange = False,
+        fcurve_interpolation = 'LINEAR',
         error_callback = __pass
         ):
     """Import animation data from 'filepath' using 'oArmature'
@@ -1430,7 +1430,17 @@ def psaimport(filepath,
     if not bActionsToTrack:
         if not scene.is_nla_tweakmode:
             armature_obj.animation_data.action = first_action
-            
+    
+    if bUpdateTimelineRange:
+
+        scene.frame_start = 0
+
+        if bActionsToTrack:
+            scene.frame_end = sum(frames for _, _, _, frames in Action_List)
+        else:
+            scene.frame_end = max(frames for _, _, _, frames in Action_List)
+
+
     util_select_all(False)
     util_obj_select(context, armature_obj)
     util_obj_set_active(context, armature_obj)
@@ -1533,6 +1543,11 @@ class ImportProps():
             description = "Add all imported action to new NLAtrack. One by one.",
             default = False,
             )
+    bUpdateTimelineRange = BoolProperty(
+            name = "Update timeline range",
+            description = "Set timeline range to match imported action[s] length.\n * If \"All actions to NLA track\" is disabled, range will be set to hold longest action.",
+            default = False,
+            )
             
     def draw_psk(self, context):
         props = bpy.context.scene.pskpsa_import
@@ -1560,6 +1575,7 @@ class ImportProps():
         layout = self.layout
         layout.prop(props,'bActionsToTrack')
         layout.prop(props,'bFilenameAsPrefix')
+        layout.prop(props,'bUpdateTimelineRange')
         # layout.prop(props, 'bDontInvertRoot')
         # layout.separator()
    
@@ -1702,6 +1718,7 @@ class IMPORT_OT_psa(bpy.types.Operator, ImportProps):
             bActionsToTrack = props.bActionsToTrack, 
             oArmature = blen_get_armature_from_selection(),
             bDontInvertRoot = props.bDontInvertRoot,
+            bUpdateTimelineRange = props.bUpdateTimelineRange,
             error_callback = util_ui_show_msg
             )
         return {'FINISHED'}
