@@ -1049,6 +1049,7 @@ def psaimport(filepath,
         first_frames = 0,
         bDontInvertRoot = False,
         bUpdateTimelineRange = False,
+        bLoopingAnim = False,
         fcurve_interpolation = 'LINEAR',
         error_callback = __pass
         ):
@@ -1439,6 +1440,9 @@ def psaimport(filepath,
             scene.frame_end = sum(frames for _, _, _, frames in Action_List)
         else:
             scene.frame_end = max(frames for _, _, _, frames in Action_List)
+        print(bLoopingAnim)
+        if bLoopingAnim:
+            scene.frame_end -= 2
 
 
     util_select_all(False)
@@ -1548,6 +1552,11 @@ class ImportProps():
             description = "Set timeline range to match imported action[s] length.\n * If \"All actions to NLA track\" is disabled, range will be set to hold longest action.",
             default = False,
             )
+    bLoopingAnim = BoolProperty(
+            name = "Looping animation",
+            description = "Subtracts two frames from the preview range to saemlessly loop.",
+            default = False,
+            )
             
     def draw_psk(self, context):
         props = bpy.context.scene.pskpsa_import
@@ -1576,6 +1585,10 @@ class ImportProps():
         layout.prop(props,'bActionsToTrack')
         layout.prop(props,'bFilenameAsPrefix')
         layout.prop(props,'bUpdateTimelineRange')
+
+        sub = layout.row();
+        sub.prop(props,'bLoopingAnim')
+        sub.enabled = props.bUpdateTimelineRange
         # layout.prop(props, 'bDontInvertRoot')
         # layout.separator()
    
@@ -1719,6 +1732,7 @@ class IMPORT_OT_psa(bpy.types.Operator, ImportProps):
             oArmature = blen_get_armature_from_selection(),
             bDontInvertRoot = props.bDontInvertRoot,
             bUpdateTimelineRange = props.bUpdateTimelineRange,
+            bLoopingAnim = props.bLoopingAnim,
             error_callback = util_ui_show_msg
             )
         return {'FINISHED'}
