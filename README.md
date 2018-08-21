@@ -18,6 +18,10 @@ https://github.com/gildor2/UModel</li>
 <li>UI option: mesh / skeleton or both import</li>
 </ul>
 
+<h5>Known issues</h5>
+
+* `All actions to NLA track` is broken in 2.8
+
 <h3>Installation</h3>  
 
 0. Download .py file ( <a href ="https://github.com/Befzz/blender3d_import_psk_psa/raw/master/addons/io_import_scene_unreal_psa_psk_280.py">direct link</a> )  
