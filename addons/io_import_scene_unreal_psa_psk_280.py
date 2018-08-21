@@ -19,15 +19,14 @@
 bl_info = {
     "name": "Import Unreal Skeleton Mesh (.psk)/Animation Set (.psa) (280)",
     "author": "Darknet, flufy3d, camg188, befzz",
-    "version": (2, 7, 3),
+    "version": (2, 7, 5),
     "blender": (2, 80, 0),
     "location": "File > Import > Skeleton Mesh (.psk)/Animation Set (.psa) OR View3D > Tool Shelf (key T) > Misc. tab",
     "description": "Import Skeleton Mesh / Animation Data",
     "warning": "",
-    "wiki_url": "http://wiki.blender.org/index.php/Extensions:2.5/Py/"
-                "Scripts/Import-Export/Unreal_psk_psa",
+    "wiki_url": "https://github.com/Befzz/blender3d_import_psk_psa",
     "category": "Import-Export",
-    "tracker_url": "https://github.com/Befzz/blender3d_import_psk_psa"
+    "tracker_url": "https://github.com/Befzz/blender3d_import_psk_psa/issues"
 }
 
 """
@@ -235,16 +234,29 @@ def calc_bone_rotation(psk_bone, bone_len, bDirectly, avg_bone_len):
             return (bone_len, quat)
             
         elif bDirectly:
-            axis_vec = psk_bone.orig_quat * psk_bone.orig_loc
+            # @
+            # axis_vec = psk_bone.orig_quat * psk_bone.orig_loc
+            axis_vec = psk_bone.orig_loc.copy()
+            axis_vec.rotate( psk_bone.orig_quat )
+
         else:
             # bone Head near parent Head?
             if psk_bone.orig_loc.length < 0.1 * avg_bone_len:
-                vec_to_axis_vec(psk_bone.orig_quat.conjugated() * psk_bone.parent.axis_vec, axis_vec)
+                # @
+                # vec_to_axis_vec(psk_bone.orig_quat.conjugated() * psk_bone.parent.axis_vec, axis_vec)
+                v = psk_bone.parent.axis_vec.copy()
+                v.rotate( psk_bone.orig_quat.conjugated() )
+                vec_to_axis_vec(v, axis_vec)
+
                 # reorient bone to other axis bychanging our base Y vec...
                 # this is not tested well
                 vecy = Vector((1.0, 0.0, 0.0))
-            else:
-                vec_to_axis_vec(psk_bone.orig_quat.conjugated() * psk_bone.parent.axis_vec, axis_vec)
+            else:                
+                # @
+                # vec_to_axis_vec(psk_bone.orig_quat.conjugated() * psk_bone.parent.axis_vec, axis_vec)
+                v = psk_bone.parent.axis_vec.copy()
+                v.rotate( psk_bone.orig_quat.conjugated() )
+                vec_to_axis_vec(v, axis_vec)
 
         return (bone_len, vecy.rotation_difference(axis_vec))
         
@@ -321,7 +333,7 @@ def pskimport(filepath,
         error_callback:
             Called when importing is failed.
             
-            __name__('?', error_callback = lambda msg: print('reason:',msg)
+            error_callback = lambda msg: print('reason:', msg)
             
     '''
     if not hasattr( error_callback, '__call__'):
@@ -331,7 +343,6 @@ def pskimport(filepath,
     if not bImportbone and not bImportmesh:
         error_callback("Nothing to do.\nSet something for import.")
         return False
-    file_ext = 'psk'
     
     print ("-----------------------------------------------")
     print ("---------EXECUTING PSK PYTHON IMPORTER---------")
@@ -376,6 +387,10 @@ def pskimport(filepath,
     #================================================================================================== 
     # Faces WdgIdx1 | WdgIdx2 | WdgIdx3 | MatIdx | AuxMatIdx | SmthGrp
     def read_faces():
+
+        if not bImportmesh:
+            return True
+
         nonlocal Faces, UV_by_face
         
         UV_by_face = [None] * chunk_datacount
@@ -411,7 +426,6 @@ def pskimport(filepath,
     #==================================================================================================
     # Vertices X | Y | Z
     def read_vertices():
-        nonlocal bImportbone, bImportmesh
         
         if not bImportmesh:
             return True
@@ -430,8 +444,7 @@ def pskimport(filepath,
     #================================================================================================== 
     # Wedges (UV)   VertexId |  U |  V | MatIdx 
     def read_wedges():
-    
-        nonlocal bImportbone, bImportmesh
+
         if not bImportmesh:
             return True
             
@@ -473,7 +486,7 @@ def pskimport(filepath,
     #================================================================================================== 
     # Influences (Bone Weight) (VRawBoneInfluence) ( Weight | PntIdx | BoneIdx)
     def read_weights():
-        # nonlocal Weights, bImportmesh
+
         nonlocal Weights
         
         if not bImportmesh:
@@ -490,6 +503,7 @@ def pskimport(filepath,
     #================================================================================================== 
     # Extra UV. U | V
     def read_extrauvs():
+
         unpack_data = Struct("=2f").unpack_from
         
         uvdata = [None] * chunk_datacount
@@ -704,9 +718,21 @@ def pskimport(filepath,
             
             # mat_world -     world space bone matrix WITHOUT own rotation
             # mat_world_rot - world space bone rotation WITH own rotation
+
+            # psk_bone.mat_world = parent.mat_world_rot.to_4x4()
+            # psk_bone.mat_world.translation = parent.mat_world.translation + parent.mat_world_rot * psk_bone.orig_loc
+            # psk_bone.mat_world_rot = parent.mat_world_rot * psk_bone.orig_quat.conjugated().to_matrix()
+
             psk_bone.mat_world = parent.mat_world_rot.to_4x4()
-            psk_bone.mat_world.translation = parent.mat_world.translation + parent.mat_world_rot * psk_bone.orig_loc
-            psk_bone.mat_world_rot = parent.mat_world_rot * psk_bone.orig_quat.conjugated().to_matrix()
+
+            v = psk_bone.orig_loc.copy()
+            v.rotate( parent.mat_world_rot )
+            psk_bone.mat_world.translation = parent.mat_world.translation + v
+
+
+            psk_bone.mat_world_rot = psk_bone.orig_quat.conjugated().to_matrix()
+            psk_bone.mat_world_rot.rotate( parent.mat_world_rot )
+
             
             # psk_bone.mat_world =  ( parent.mat_world_rot.to_4x4() * psk_bone.trans)
             # psk_bone.mat_world.translation += parent.mat_world.translation
@@ -752,17 +778,28 @@ def pskimport(filepath,
                 
             if bReorientBones:
                 (new_bone_size, quat_orient_diff) = calc_bone_rotation(psk_bone, bone_size_choosen, bReorientDirectly, sum_bone_pos)
-                post_quat = psk_bone.orig_quat.conjugated() * quat_orient_diff
+                # @
+                # post_quat = psk_bone.orig_quat.conjugated() * quat_orient_diff
+
+                post_quat = quat_orient_diff
+                post_quat.rotate( psk_bone.orig_quat.conjugated() )
             else:
                 new_bone_size = bone_size_choosen
                 post_quat = psk_bone.orig_quat.conjugated()
             
             # only length of this vector is matter?
             edit_bone.tail = Vector(( 0.0, new_bone_size, 0.0))
-            # edit_bone.tail = Vector((0.0, 0.0, new_bone_size))
             
-            # edit_bone.matrix = psk_bone.mat_world * quat_diff.to_matrix().to_4x4()
-            edit_bone.matrix = psk_bone.mat_world * post_quat.to_matrix().to_4x4()
+            # @
+            # edit_bone.matrix = psk_bone.mat_world * post_quat.to_matrix().to_4x4()
+
+            m = post_quat.copy()
+            m.rotate( psk_bone.mat_world )
+
+            m = m.to_matrix().to_4x4()
+            m.translation = psk_bone.mat_world.translation
+
+            edit_bone.matrix = m
             
             
             # some dev code...
@@ -1046,10 +1083,11 @@ def psaimport(filepath,
         context = bpy.context,
         oArmature = None,
         bFilenameAsPrefix = False,
-        bActionsToTrack = False,  
-        first_frames = 0, 
-        bDontInvertRoot = False, 
-        fcurve_interpolation = 'LINEAR', 
+        bActionsToTrack = False,
+        first_frames = 0,
+        bDontInvertRoot = False,
+        bUpdateTimelineRange = False,
+        fcurve_interpolation = 'LINEAR',
         error_callback = __pass
         ):
     """Import animation data from 'filepath' using 'oArmature'
@@ -1317,8 +1355,8 @@ def psaimport(filepath,
             # 2. Set data: keyframe_points[].co[0..1]
             # 3. If 2 is not done, do 4: (important!!!)
             # 4. "Apply" data: fcurve.update()
-            # added keyframes points by default is breaking fcurve somehow
-            # bcs they are all at the same position?
+            #      # added keyframes points by default is breaking fcurve somehow
+            #      # bcs they are all at the same position?
             psa_bone.fcurve_quat_w.keyframe_points.add(keyframes)
             psa_bone.fcurve_quat_x.keyframe_points.add(keyframes)
             psa_bone.fcurve_quat_y.keyframe_points.add(keyframes)
@@ -1340,34 +1378,40 @@ def psaimport(filepath,
                 
                 p_pos = Raw_Key_List[raw_key_index][0]
                 p_quat = Raw_Key_List[raw_key_index][1]
-                
-                ##### Worked with no bone rotation
-                # quat = p_quat.conjugated() * psa_bone.orig_quat
-                # loc = p_pos - psa_bone.orig_loc
-                #####
-                    
 
-                if psa_bone.parent:
-                    ##### Correct
-                    # orig_prot = pose_bone.bone.parent.matrix_local.to_3x3().to_quaternion()
-                    # orig_rot = pose_bone.bone.matrix_local.to_3x3().to_quaternion()
-                    # orig_rot = (orig_prot.conjugated() * orig_rot)
-                    ######
+                # @
+                # if psa_bone.parent:
+                    # quat = (p_quat * psa_bone.post_quat).conjugated() * (psa_bone.orig_quat * psa_bone.post_quat)
+                # else:
+                #     if bDontInvertRoot:
+                #         quat = (p_quat.conjugated() * psa_bone.post_quat).conjugated() * (psa_bone.orig_quat * psa_bone.post_quat)
+                #     else:
+                        # quat = (p_quat * psa_bone.post_quat).conjugated() * (psa_bone.orig_quat * psa_bone.post_quat)
 
-                    #### FINAL
-                    quat = (p_quat * psa_bone.post_quat).conjugated() * (psa_bone.orig_quat * psa_bone.post_quat)
-                    # loc = psa_bone.post_quat.conjugated() * p_pos -  psa_bone.post_quat.conjugated() * psa_bone.orig_loc
-                    ####
+                q = psa_bone.post_quat.copy()
+                q.rotate( psa_bone.orig_quat )
+
+                quat = q
+
+                q = psa_bone.post_quat.copy()
+
+                if psa_bone.parent == None and bDontInvertRoot:
+                    q.rotate( p_quat.conjugated() )
                 else:
-                    if bDontInvertRoot:
-                        quat = (p_quat.conjugated() * psa_bone.post_quat).conjugated() * (psa_bone.orig_quat * psa_bone.post_quat)
-                    else:
-                        quat = (p_quat * psa_bone.post_quat).conjugated() * (psa_bone.orig_quat * psa_bone.post_quat)
+                    q.rotate( p_quat )
+
+                quat.rotate( q.conjugated() )
                         
-                loc = psa_bone.post_quat.conjugated() * p_pos -  psa_bone.post_quat.conjugated() * psa_bone.orig_loc
+                # @
+                # loc = psa_bone.post_quat.conjugated() * p_pos -  psa_bone.post_quat.conjugated() * psa_bone.orig_loc
+                loc = (p_pos - psa_bone.orig_loc)
+                loc.rotate( psa_bone.post_quat.conjugated() )
                     
-                pose_bone.rotation_quaternion = quat
-                pose_bone.location = loc
+
+                # Set it?
+                # pose_bone.rotation_quaternion = quat
+                # pose_bone.location = loc
+
                     # pose_bone.rotation_quaternion = orig_rot.conjugated()
                     # pose_bone.location = p_pos - (pose_bone.bone.matrix_local.translation - pose_bone.bone.parent.matrix_local.translation)
                 
@@ -1430,7 +1474,17 @@ def psaimport(filepath,
     if not bActionsToTrack:
         if not scene.is_nla_tweakmode:
             armature_obj.animation_data.action = first_action
-            
+    
+    if bUpdateTimelineRange:
+
+        scene.frame_start = 0
+
+        if bActionsToTrack:
+            scene.frame_end = sum(frames for _, _, _, frames in Action_List) - 1
+        else:
+            scene.frame_end = max(frames for _, _, _, frames in Action_List) - 1
+
+
     util_select_all(False)
     util_obj_select(context, armature_obj)
     util_obj_set_active(context, armature_obj)
@@ -1533,6 +1587,11 @@ class ImportProps():
             description = "Add all imported action to new NLAtrack. One by one.",
             default = False,
             )
+    bUpdateTimelineRange = BoolProperty(
+            name = "Update timeline range",
+            description = "Set timeline range to match imported action[s] length.\n * If \"All actions to NLA track\" is disabled, range will be set to hold longest action.",
+            default = False,
+            )
             
     def draw_psk(self, context):
         props = bpy.context.scene.pskpsa_import
@@ -1560,6 +1619,7 @@ class ImportProps():
         layout = self.layout
         layout.prop(props,'bActionsToTrack')
         layout.prop(props,'bFilenameAsPrefix')
+        layout.prop(props,'bUpdateTimelineRange')
         # layout.prop(props, 'bDontInvertRoot')
         # layout.separator()
    
@@ -1702,6 +1762,7 @@ class IMPORT_OT_psa(bpy.types.Operator, ImportProps):
             bActionsToTrack = props.bActionsToTrack, 
             oArmature = blen_get_armature_from_selection(),
             bDontInvertRoot = props.bDontInvertRoot,
+            bUpdateTimelineRange = props.bUpdateTimelineRange,
             error_callback = util_ui_show_msg
             )
         return {'FINISHED'}
