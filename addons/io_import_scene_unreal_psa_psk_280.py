@@ -377,6 +377,9 @@ def pskimport(filepath,
     def read_faces():
         nonlocal Faces, UV_by_face
         
+        if not bImportmesh:
+            return True
+        
         UV_by_face = [None] * chunk_datacount
         Faces = [None] * chunk_datacount
         
@@ -556,6 +559,10 @@ def pskimport(filepath,
          
     print(" Importing file:", filepath)
     
+    if not bImportmesh and (Bones is None or len(Bones) == 0):
+        error_callback("Psk: no skeleton data.")
+        return False
+
     MAX_UVS = 8
     NAME_UV_PREFIX = "UV"
     
