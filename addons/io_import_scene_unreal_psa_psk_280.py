@@ -234,7 +234,7 @@ def calc_bone_rotation(psk_bone, bone_len, bDirectly, avg_bone_len):
             return (bone_len, quat)
             
         elif bDirectly:
-            # @
+                        # @
             # axis_vec = psk_bone.orig_quat * psk_bone.orig_loc
             axis_vec = psk_bone.orig_loc.copy()
             axis_vec.rotate( psk_bone.orig_quat )
@@ -251,7 +251,7 @@ def calc_bone_rotation(psk_bone, bone_len, bDirectly, avg_bone_len):
                 # reorient bone to other axis bychanging our base Y vec...
                 # this is not tested well
                 vecy = Vector((1.0, 0.0, 0.0))
-            else:                
+            else:
                 # @
                 # vec_to_axis_vec(psk_bone.orig_quat.conjugated() * psk_bone.parent.axis_vec, axis_vec)
                 v = psk_bone.parent.axis_vec.copy()
@@ -343,7 +343,7 @@ def pskimport(filepath,
     if not bImportbone and not bImportmesh:
         error_callback("Nothing to do.\nSet something for import.")
         return False
-    
+        
     print ("-----------------------------------------------")
     print ("---------EXECUTING PSK PYTHON IMPORTER---------")
     print ("-----------------------------------------------")
@@ -387,12 +387,12 @@ def pskimport(filepath,
     #================================================================================================== 
     # Faces WdgIdx1 | WdgIdx2 | WdgIdx3 | MatIdx | AuxMatIdx | SmthGrp
     def read_faces():
-
+        
         if not bImportmesh:
             return True
-
-        nonlocal Faces, UV_by_face
         
+        nonlocal Faces, UV_by_face
+
         UV_by_face = [None] * chunk_datacount
         Faces = [None] * chunk_datacount
         
@@ -444,7 +444,7 @@ def pskimport(filepath,
     #================================================================================================== 
     # Wedges (UV)   VertexId |  U |  V | MatIdx 
     def read_wedges():
-
+    
         if not bImportmesh:
             return True
             
@@ -571,6 +571,10 @@ def pskimport(filepath,
          
     print(" Importing file:", filepath)
     
+    if not bImportmesh and (Bones is None or len(Bones) == 0):
+        error_callback("Psk: no skeleton data.")
+        return False
+
     MAX_UVS = 8
     NAME_UV_PREFIX = "UV"
     
@@ -733,7 +737,7 @@ def pskimport(filepath,
             psk_bone.mat_world_rot = psk_bone.orig_quat.conjugated().to_matrix()
             psk_bone.mat_world_rot.rotate( parent.mat_world_rot )
 
-            
+
             # psk_bone.mat_world =  ( parent.mat_world_rot.to_4x4() * psk_bone.trans)
             # psk_bone.mat_world.translation += parent.mat_world.translation
             # psk_bone.mat_world_rot = parent.mat_world_rot * psk_bone.orig_quat.conjugated().to_matrix()
@@ -746,8 +750,14 @@ def pskimport(filepath,
         armature_obj = bpy.data.objects.new(gen_names['armature_object'], armature_data)
         # TODO: options for axes and x_ray?
         armature_data.show_axes = False
-        armature_data.draw_type = 'STICK'
-        armature_obj.show_x_ray = True
+
+        if is_blen_280:
+            armature_data.display_type = 'STICK'
+            armature_obj.show_in_front = True
+        else:
+            armature_data.draw_type = 'STICK'
+            armature_obj.show_x_ray = True
+
 
         util_obj_link(context, armature_obj)
 
@@ -789,7 +799,7 @@ def pskimport(filepath,
             
             # only length of this vector is matter?
             edit_bone.tail = Vector(( 0.0, new_bone_size, 0.0))
-            
+
             # @
             # edit_bone.matrix = psk_bone.mat_world * post_quat.to_matrix().to_4x4()
 
@@ -821,10 +831,30 @@ def pskimport(filepath,
               
               
             # save bindPose information for .psa import
+            # dev
             edit_bone["orig_quat"] = psk_bone.orig_quat
             edit_bone["orig_loc"]  = psk_bone.orig_loc
             edit_bone["post_quat"] = post_quat
-            
+
+            '''
+            bone = edit_bone
+            if psk_bone.parent is not None:
+                orig_loc  =  bone.matrix.translation - bone.parent.matrix.translation
+                orig_loc.rotate( bone.parent.matrix.to_quaternion().conjugated() )
+
+                
+                orig_quat = bone.matrix.to_quaternion()
+                orig_quat.rotate( bone.parent.matrix.to_quaternion().conjugated()  )
+                orig_quat.conjugate()
+
+                if orig_quat.dot( psk_bone.orig_quat ) < 0.95:
+                    print(bone.name, psk_bone.orig_quat, orig_quat, orig_quat.dot( psk_bone.orig_quat ))
+                    print('parent:', bone.parent.matrix.to_quaternion(), bone.parent.matrix.to_quaternion().rotation_difference(bone.matrix.to_quaternion()) )
+
+
+                if (psk_bone.orig_loc - orig_loc).length > 0.02:
+                    print(bone.name, psk_bone.orig_loc, orig_loc, (psk_bone.orig_loc - orig_loc).length)
+            '''
     utils_set_mode('OBJECT')
          
     #==================================================================================================
@@ -967,7 +997,7 @@ def pskimport(filepath,
         
         for psk_bone in psk_bones:
             if psk_bone.have_weight_data:
-                psk_bone.vertex_group = mesh_obj.vertex_groups.new(psk_bone.name)
+                psk_bone.vertex_group = mesh_obj.vertex_groups.new(name = psk_bone.name)
             # else:
                 # print(psk_bone.name, 'have no influence on this mesh')
         
@@ -980,10 +1010,10 @@ def pskimport(filepath,
     
     if bImportbone:
     
-        bone_group_unused = armature_obj.pose.bone_groups.new("Unused bones")
+        bone_group_unused = armature_obj.pose.bone_groups.new(name = "Unused bones")
         bone_group_unused.color_set = 'THEME14'
 
-        bone_group_nochild = armature_obj.pose.bone_groups.new("No children")
+        bone_group_nochild = armature_obj.pose.bone_groups.new(name = "No children")
         bone_group_nochild.color_set = 'THEME03'
 
         armature_data.show_group_colors = True
@@ -1172,10 +1202,28 @@ def psaimport(filepath,
                 psa_bone.parent = None
         # else:
             # psa_bone.parent = None
-            
-        psa_bone.orig_quat = Quaternion(bone['orig_quat'])
-        psa_bone.orig_loc  =     Vector(bone['orig_loc'])
-        psa_bone.post_quat = Quaternion(bone['post_quat'])
+
+        # brute fix for non psk skeletons
+        if bone.get('orig_quat') is None:
+
+            if bone.parent != None:
+                
+                psa_bone.orig_loc  =  bone.matrix_local.translation - bone.parent.matrix_local.translation
+                psa_bone.orig_loc.rotate( bone.parent.matrix_local.to_quaternion().conjugated() )
+
+                psa_bone.orig_quat = bone.matrix_local.to_quaternion()
+                psa_bone.orig_quat.rotate( bone.parent.matrix_local.to_quaternion().conjugated()  )
+                psa_bone.orig_quat.conjugate()
+            else:
+                psa_bone.orig_loc  = bone.matrix_local.translation.copy()
+                psa_bone.orig_quat = bone.matrix_local.to_quaternion()
+
+            psa_bone.post_quat = psa_bone.orig_quat.conjugated()
+        else:
+            psa_bone.orig_quat = Quaternion(bone['orig_quat'])
+            psa_bone.orig_loc  =     Vector(bone['orig_loc'])
+            psa_bone.post_quat = Quaternion(bone['post_quat'])
+
         return psa_bone
         
     #Bones Data
@@ -1305,9 +1353,9 @@ def psaimport(filepath,
         nla_track.name = gen_name_part
         nla_stripes = nla_track.strips
         nla_track_last_frame = 0
-    else:
-        is_first_action = True
-        first_action = None
+    
+    is_first_action = True
+    first_action = None
         
     for counter, (Name, Group, Totalbones, NumRawFrames) in enumerate(Action_List):
         ref_time = time.process_time()
@@ -1378,7 +1426,7 @@ def psaimport(filepath,
                 
                 p_pos = Raw_Key_List[raw_key_index][0]
                 p_quat = Raw_Key_List[raw_key_index][1]
-
+                
                 # @
                 # if psa_bone.parent:
                     # quat = (p_quat * psa_bone.post_quat).conjugated() * (psa_bone.orig_quat * psa_bone.post_quat)
@@ -1461,7 +1509,8 @@ def psaimport(filepath,
                 nla_stripes.new(Name, nla_stripes[-1].frame_end, action)
 
             nla_track_last_frame += NumRawFrames
-        elif is_first_action:
+
+        if is_first_action:
             first_action = action
             is_first_action = False
             
@@ -1474,6 +1523,9 @@ def psaimport(filepath,
     if not bActionsToTrack:
         if not scene.is_nla_tweakmode:
             armature_obj.animation_data.action = first_action
+    
+    if is_blen_280:
+        armature_obj.animation_data.action = first_action
     
     if bUpdateTimelineRange:
 
@@ -1493,13 +1545,13 @@ def psaimport(filepath,
     if not is_blen_280:
         scene.frame_set(0)
 
- 
 class PSKPSA_OT_show_message(bpy.types.Operator):
     bl_idname = "pskpsa.message"
     bl_label = "PSA/PSK"
     bl_options = {'REGISTER', 'INTERNAL'}
 
     message = StringProperty(default = 'Message')
+
     lines = []
     line0 = None
     def execute(self, context):
@@ -1693,7 +1745,9 @@ class IMPORT_OT_psk(bpy.types.Operator, ImportProps):
             default = "*.psk;*.pskx",
             options = {'HIDDEN'},
             )
-            
+    files = bpy.props.CollectionProperty(type=bpy.types.OperatorFileListElement, options={'HIDDEN', 'SKIP_SAVE'})
+    directory = bpy.props.StringProperty(subtype='FILE_PATH', options={'HIDDEN', 'SKIP_SAVE'})
+    
     def draw(self, context):
         self.draw_psk(context)
         # self.layout.prop(context.scene.pskpsa_import, 'bDontInvertRoot')
@@ -1711,8 +1765,12 @@ class IMPORT_OT_psk(bpy.types.Operator, ImportProps):
             bImportmesh = True
             bImportbone = True
         
-        no_errors = pskimport( 
-                        self.filepath,
+        no_errors = True
+        
+        for f in enumerate(self.files):
+            fpath = self.directory + f[1].name
+            no_errors = no_errors and pskimport( 
+                        fpath,
                         context = context,
                         bImportmesh = bImportmesh, bImportbone = bImportbone,
                         fBonesize = props.fBonesize,
@@ -1723,6 +1781,7 @@ class IMPORT_OT_psk(bpy.types.Operator, ImportProps):
                         bDontInvertRoot = props.bDontInvertRoot,
                         error_callback = util_ui_show_msg
                         )
+
         if not no_errors:
             return {'CANCELLED'}
         else:
@@ -1775,7 +1834,7 @@ class IMPORT_OT_psa(bpy.types.Operator, ImportProps):
         wm.fileselect_add(self)
         return {'RUNNING_MODAL'}
 
-class PSKPSA_import_panel(bpy.types.Panel, ImportProps):
+class PSKPSA_PT_import_panel(bpy.types.Panel, ImportProps):
     bl_label = "PSK/PSA Import"
     bl_idname = "VIEW3D_PT_udk_import"
     bl_space_type = "VIEW_3D"
@@ -1821,7 +1880,7 @@ classes = (
         IMPORT_OT_psk,
         IMPORT_OT_psa,
         PskImportOptions,
-        PSKPSA_import_panel,
+        PSKPSA_PT_import_panel,
         PSKPSA_OT_show_message,
         PSKPSA_OT_hide_unused_bones
     )
@@ -1832,7 +1891,10 @@ def register():
     for cls in classes:
         register_class(cls)
         
-    bpy.types.INFO_MT_file_import.append(menu_import_draw)
+    if is_blen_280:
+        bpy.types.TOPBAR_MT_file_import.append(menu_import_draw)
+    else:
+        bpy.types.INFO_MT_file_import.append(menu_import_draw)
     
     bpy.types.Scene.pskpsa_import = PointerProperty(type = PskImportOptions)
     
@@ -1841,7 +1903,10 @@ def unregister():
     for cls in classes:
         unregister_class(cls)
         
-    bpy.types.INFO_MT_file_import.remove(menu_import_draw)
+    if is_blen_280:
+        bpy.types.TOPBAR_MT_file_import.append(menu_import_draw)
+    else:
+        bpy.types.INFO_MT_file_import.remove(menu_import_draw)
     
     del bpy.types.Scene.pskpsa_import
     
