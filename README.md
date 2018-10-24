@@ -10,7 +10,7 @@ https://github.com/gildor2/UModel</li>
 
 <h5>Changes from original release</h5>
 <ul>
-<li>Blender 2.80+ support (experimental)</li>
+<li>Blender 2.80+ support (check <a href="https://github.com/Befzz/blender3d_import_psk_psa/issues">issues</a> first!)</li>
 <li>Fixed animation/skeleton import</li>
 <li>Performance improvements</li>
 <li>Panel UI updated</li>
