@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Import Unreal Skeleton Mesh (.psk)/Animation Set (.psa) (280)",
     "author": "Darknet, flufy3d, camg188, befzz",
-    "version": (2, 7, 5),
+    "version": (2, 7, 6),
     "blender": (2, 80, 0),
     "location": "File > Import > Skeleton Mesh (.psk)/Animation Set (.psa) OR View3D > Tool Shelf (key T) > Misc. tab",
     "description": "Import Skeleton Mesh / Animation Data",
@@ -89,9 +89,11 @@ if is_blen_280:
         context.collection.objects.link(obj)
 
     def util_obj_select(context, obj, action = 'SELECT'):
-          # if obj.name in bpy.data.scenes[0].view_layers[0].objects:
-          if obj.name in context.view_layer.objects:
-              return obj.select_set(action)
+        # if obj.name in bpy.data.scenes[0].view_layers[0].objects:
+        if obj.name in context.view_layer.objects:
+            return obj.select_set(action == 'SELECT')
+        else:
+            print('Warning: util_obj_select: Object not in "context.view_layer.objects"')
 
     def util_obj_set_active(context, obj):
         # bpy.context.view_layer.objects.active = obj
@@ -1275,10 +1277,10 @@ def psaimport(filepath,
             BonesWithoutAnimation.append(blender_bone_name)
             
     if len(BoneNotFoundList) > 0:
-      print('Not found bones: %i.' % len(BoneNotFoundList));
+        print('PSA have data for more bones: %i.' % len(BoneNotFoundList))
       
     if len(BonesWithoutAnimation) > 0:
-      print('Bones(%i) without animation data:\n' % len(BonesWithoutAnimation), ', '.join(BonesWithoutAnimation))
+        print('PSA do not have data for %i bones:\n' % len(BonesWithoutAnimation), ', '.join(BonesWithoutAnimation))
     #============================================================================================== 
     # Animations (AniminfoBinary)
     #============================================================================================== 
@@ -1422,7 +1424,7 @@ def psaimport(filepath,
                     continue
                 
                 psa_bone = PsaBonesToProcess[j]
-                pose_bone = psa_bone.pose_bone
+                # pose_bone = psa_bone.pose_bone
                 
                 p_pos = Raw_Key_List[raw_key_index][0]
                 p_quat = Raw_Key_List[raw_key_index][1]
@@ -1584,13 +1586,15 @@ class PSKPSA_OT_show_message(bpy.types.Operator):
     def draw(self, context):
         layout = self.layout
         sub = layout.column()
-        sub.label(self.line0, icon = 'ERROR')
+        sub.label(text = self.line0, icon = 'ERROR')
 
         for line in self.lines:
-            sub.label(line)
-    
+            sub.label(text = line)
+        
+
 #properties for panels, and Operator.
 class ImportProps():
+
     fBonesize = FloatProperty(
             name = "Orphan bone length",
             description = "Maximum orphan bone length",
@@ -1661,7 +1665,7 @@ class ImportProps():
         # layout.prop(props, 'bDontInvertRoot', icon = 'ERROR' if props.bDontInvertRoot else 'NONE')
         sub.prop(props, 'bDontInvertRoot')
         if props.bDontInvertRoot:
-            sub.label("", icon = 'ERROR')
+            sub.label(text = "", icon = 'ERROR')
             
         layout.prop(props, 'fBonesizeRatio')
         layout.prop(props, 'fBonesize')
@@ -1850,12 +1854,12 @@ class PSKPSA_PT_import_panel(bpy.types.Panel, ImportProps):
     def draw(self, context):
         props = context.scene.pskpsa_import
         if props is None:
-            self.layout.label("??")
+            self.layout.label(text = "??")
             return
         # return
         layout = self.layout
        
-        # layout.label("Mesh and skeleton:")
+        # layout.label(text = "Mesh and skeleton:")
         layout.operator(IMPORT_OT_psk.bl_idname, icon = 'MESH_DATA')
         self.draw_psk(context)
         # layout.prop(props, 'import_mode',expand = True)
@@ -1867,7 +1871,7 @@ class PSKPSA_PT_import_panel(bpy.types.Panel, ImportProps):
                        
         layout.separator()
         layout.separator()
-        # layout.label("Animation:", icon = 'ANIM')
+        # layout.label(text = "Animation:", icon = 'ANIM')
         layout.operator(IMPORT_OT_psa.bl_idname, icon = 'ANIM')
         self.draw_psa(context)
 
