@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Import Unreal Skeleton Mesh (.psk)/Animation Set (.psa) (280)",
     "author": "Darknet, flufy3d, camg188, befzz",
-    "version": (2, 7, 6),
+    "version": (2, 7, 7),
     "blender": (2, 80, 0),
     "location": "File > Import > Skeleton Mesh (.psk)/Animation Set (.psa) OR View3D > Tool Shelf (key T) > Misc. tab",
     "description": "Import Skeleton Mesh / Animation Data",
@@ -1842,7 +1842,8 @@ class PSKPSA_PT_import_panel(bpy.types.Panel, ImportProps):
     bl_label = "PSK/PSA Import"
     bl_idname = "VIEW3D_PT_udk_import"
     bl_space_type = "VIEW_3D"
-    bl_region_type = "TOOLS"
+    bl_region_type = "UI"
+    bl_category = "PSK / PSA"
     
     # @classmethod
     # def poll(cls, context):
