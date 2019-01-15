@@ -17,10 +17,10 @@
 # ##### END GPL LICENSE BLOCK #####
 
 bl_info = {
-    "name": "Import Unreal Skeleton Mesh (.psk)/Animation Set (.psa) (280)",
+    "name": "Import Unreal Skeleton Mesh (.psk)/Animation Set (.psa) (270)",
     "author": "Darknet, flufy3d, camg188, befzz",
-    "version": (2, 7, 4),
-    "blender": (2, 78, 0),
+    "version": (2, 7, 5),
+    "blender": (2, 76, 0),
     "location": "File > Import > Skeleton Mesh (.psk)/Animation Set (.psa) OR View3D > Tool Shelf (key T) > Misc. tab",
     "description": "Import Skeleton Mesh / Animation Data",
     "warning": "",
@@ -74,61 +74,26 @@ import time
 # from mathutils import *
 # from math import *
 
-### Cross-version proxy functions 2.8 - 2.7 WiP
-# Don't using bpy.context in 2.8
-# bpy.app.version: (2,80,17)
-v = bpy.app.version
-is_blen_280 = (v[0]*1000000 + v[1]*1000 + v[2]) >= 2080017
+is_blen_280 = False
 
-if is_blen_280:
-    def util_obj_link(context, obj):
-        # return bpy.context.scene_collection.objects.link(obj)
-        # bpy.context.view_layer.collections[0].collection.objects.link(obj)
-        # return bpy.context.collection.objects.link(obj)
-        # bpy.data.scenes[0].collection.objects.link(obj)
-        context.collection.objects.link(obj)
+def util_obj_link(context, obj):
+    bpy.context.scene.objects.link(obj)
 
-    def util_obj_select(context, obj, action = 'SELECT'):
-          # if obj.name in bpy.data.scenes[0].view_layers[0].objects:
-          if obj.name in context.view_layer.objects:
-              return obj.select_set(action)
+def util_obj_select(context, obj, action = 'SELECT'):
+    obj.select = (action == 'SELECT')
 
-    def util_obj_set_active(context, obj):
-        # bpy.context.view_layer.objects.active = obj
-        # bpy.data.scenes[0].view_layers[0].objects.active = obj
-        context.view_layer.objects.active = obj
+def util_obj_set_active(context, obj):
+    bpy.context.scene.objects.active = obj
 
-    def util_get_scene(context):
-        return context.scene
-
-    def get_uv_layers(mesh_obj):
-        return mesh_obj.uv_layers
-      
-    def obj_select_get(obj):
-        return obj.select_get()
-else:
-    # Suppress the warning in older versions:
-    #   "Warning: This script was written Blender version 2.80.0 and might not function (correctly), though it is enabled"
-    bl_info['blender'] = (2,64,0)
+def get_uv_layers(mesh_obj):
+    return mesh_obj.uv_textures
     
-    def util_obj_link(context, obj):
-        bpy.context.scene.objects.link(obj)
+def util_get_scene(context):
+    return bpy.context.scene
+    
+def obj_select_get(obj):
+    return obj.select
 
-    def util_obj_select(context, obj, action = 'SELECT'):
-        obj.select = (action == 'SELECT')
-
-    def util_obj_set_active(context, obj):
-        bpy.context.scene.objects.active = obj
-
-    def get_uv_layers(mesh_obj):
-        return mesh_obj.uv_textures
-      
-    def util_get_scene(context):
-        return bpy.context.scene
-        
-    def obj_select_get(obj):
-        return obj.select
-del v
 
 def utils_set_mode(mode):
     if bpy.ops.object.mode_set.poll():
