@@ -10,7 +10,7 @@ https://github.com/gildor2/UModel</li>
 
 <h5>Changes from original release</h5>
 <ul>
-<li>Blender 2.80+ support (check <a href="https://github.com/Befzz/blender3d_import_psk_psa/issues">issues</a> and try addon from  <a href="https://github.com/Befzz/blender3d_import_psk_psa/tree/latest/addons"><i>latest branch</i></a> first!)</li>
+<li>Blender 2.80+ support (check <a href="https://github.com/Befzz/blender3d_import_psk_psa/issues">issues</a> first!)</li>
 <li>Fixed animation/skeleton import</li>
 <li>Performance improvements</li>
 <li>Panel UI updated</li>
@@ -43,12 +43,12 @@ https://github.com/gildor2/UModel</li>
 `Import Unreal Skeleton Mesh (.psk)/Animation Set (.psa)`
 3. Enable this one:  
 `Import Unreal Skeleton Mesh (.psk)/Animation Set (.psa) (280)`
-<h3>Usage</h3>  
+<h3>Usage (270)</h3>  
 
 1. In 3DView, press **T** (Toggle Toolbar)  
 2. Click **Misc.** tab.  
 
 <table><tbody>
-<tr><th> Panel in 3DView </th></tr>
+<tr><th> Panel in 3DView (270) </th></tr>
 <tr><td valign="top" align="center"><img src="https://github.com/Befzz/blender3d_import_psk_psa/blob/latest/imgs/panel.jpg"/></td>
 </tr></tbody></table>
