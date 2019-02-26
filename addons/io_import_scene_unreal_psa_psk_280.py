@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Import Unreal Skeleton Mesh (.psk)/Animation Set (.psa) (280)",
     "author": "Darknet, flufy3d, camg188, befzz",
-    "version": (2, 7, 8),
+    "version": (2, 7, 9),
     "blender": (2, 80, 0),
     "location": "File > Import > Skeleton Mesh (.psk)/Animation Set (.psa) OR View3D > Tool Shelf (key T) > Misc. tab",
     "description": "Import Skeleton Mesh / Animation Data",
@@ -1092,6 +1092,7 @@ def psaimport(filepath,
         first_frames = 0,
         bDontInvertRoot = False,
         bUpdateTimelineRange = False,
+        bRotationOnly = False,
         fcurve_interpolation = 'LINEAR',
         error_callback = __pass
         ):
@@ -1369,10 +1370,11 @@ def psaimport(filepath,
             psa_bone.fcurve_quat_y = action.fcurves.new(data_path, index = 2)
             psa_bone.fcurve_quat_z = action.fcurves.new(data_path, index = 3)
         
-            data_path = pose_bone.path_from_id("location")
-            psa_bone.fcurve_loc_x = action.fcurves.new(data_path, index = 0)
-            psa_bone.fcurve_loc_y = action.fcurves.new(data_path, index = 1)
-            psa_bone.fcurve_loc_z = action.fcurves.new(data_path, index = 2)
+            if not bRotationOnly:
+                data_path = pose_bone.path_from_id("location")
+                psa_bone.fcurve_loc_x = action.fcurves.new(data_path, index = 0)
+                psa_bone.fcurve_loc_y = action.fcurves.new(data_path, index = 1)
+                psa_bone.fcurve_loc_z = action.fcurves.new(data_path, index = 2)
             
             # 1. Pre-add keyframes! \0/
             # 2. Set data: keyframe_points[].co[0..1]
@@ -1385,9 +1387,10 @@ def psaimport(filepath,
             psa_bone.fcurve_quat_y.keyframe_points.add(keyframes)
             psa_bone.fcurve_quat_z.keyframe_points.add(keyframes)
 
-            psa_bone.fcurve_loc_x.keyframe_points.add(keyframes) 
-            psa_bone.fcurve_loc_y.keyframe_points.add(keyframes) 
-            psa_bone.fcurve_loc_z.keyframe_points.add(keyframes) 
+            if not bRotationOnly:
+                psa_bone.fcurve_loc_x.keyframe_points.add(keyframes) 
+                psa_bone.fcurve_loc_y.keyframe_points.add(keyframes) 
+                psa_bone.fcurve_loc_z.keyframe_points.add(keyframes) 
             
         for i in range(0,min(maxframes, NumRawFrames)):
             # raw_key_index+= Totalbones * 5 #55
@@ -1427,8 +1430,10 @@ def psaimport(filepath,
                         
                 # @
                 # loc = psa_bone.post_quat.conjugated() * p_pos -  psa_bone.post_quat.conjugated() * psa_bone.orig_loc
-                loc = (p_pos - psa_bone.orig_loc)
-                loc.rotate( psa_bone.post_quat.conjugated() )
+                
+                if not bRotationOnly:
+                    loc = (p_pos - psa_bone.orig_loc)
+                    loc.rotate( psa_bone.post_quat.conjugated() )
                     
 
                 # Set it?
@@ -1453,13 +1458,15 @@ def psaimport(filepath,
                 psa_bone.fcurve_quat_y.keyframe_points[i].interpolation = fcurve_interpolation
                 psa_bone.fcurve_quat_z.keyframe_points[i].interpolation = fcurve_interpolation
                 
-                psa_bone.fcurve_loc_x.keyframe_points[i].co = i, loc.x
-                psa_bone.fcurve_loc_y.keyframe_points[i].co = i, loc.y
-                psa_bone.fcurve_loc_z.keyframe_points[i].co = i, loc.z
                 
-                psa_bone.fcurve_loc_x.keyframe_points[i].interpolation = fcurve_interpolation
-                psa_bone.fcurve_loc_y.keyframe_points[i].interpolation = fcurve_interpolation
-                psa_bone.fcurve_loc_z.keyframe_points[i].interpolation = fcurve_interpolation
+                if not bRotationOnly:
+                    psa_bone.fcurve_loc_x.keyframe_points[i].co = i, loc.x
+                    psa_bone.fcurve_loc_y.keyframe_points[i].co = i, loc.y
+                    psa_bone.fcurve_loc_z.keyframe_points[i].co = i, loc.z
+                    
+                    psa_bone.fcurve_loc_x.keyframe_points[i].interpolation = fcurve_interpolation
+                    psa_bone.fcurve_loc_y.keyframe_points[i].interpolation = fcurve_interpolation
+                    psa_bone.fcurve_loc_z.keyframe_points[i].interpolation = fcurve_interpolation
                 
                 # Old path. Slower.
                 # psa_bone.fcurve_quat_w.keyframe_points.insert(i,quat.w,{'NEEDED','FAST'}).interpolation = fcurve_interpolation
@@ -1621,6 +1628,11 @@ class ImportProps():
             description = "Set timeline range to match imported action[s] length.\n * If \"All actions to NLA track\" is disabled, range will be set to hold longest action.",
             default = False,
             )
+    bRotationOnly : BoolProperty(
+            name = "Rotation only",
+            description = "Create only rotation keyframes.",
+            default = False,
+            )
             
     def draw_psk(self, context):
         props = bpy.context.scene.pskpsa_import
@@ -1649,6 +1661,7 @@ class ImportProps():
         layout.prop(props,'bActionsToTrack')
         layout.prop(props,'bFilenameAsPrefix')
         layout.prop(props,'bUpdateTimelineRange')
+        layout.prop(props,'bRotationOnly')
         # layout.prop(props, 'bDontInvertRoot')
         # layout.separator()
    
@@ -1799,6 +1812,7 @@ class IMPORT_OT_psa(bpy.types.Operator, ImportProps):
             oArmature = blen_get_armature_from_selection(),
             bDontInvertRoot = props.bDontInvertRoot,
             bUpdateTimelineRange = props.bUpdateTimelineRange,
+            bRotationOnly = props.bRotationOnly,
             error_callback = util_ui_show_msg
             )
         return {'FINISHED'}
