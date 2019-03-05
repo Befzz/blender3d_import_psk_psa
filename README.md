@@ -25,8 +25,16 @@ https://github.com/gildor2/UModel</li>
 <h3>Installation</h3>  
 
 0. Download .py file:  
+
+Current ( branch *latest* ):  
+<a href ="https://github.com/Befzz/blender3d_import_psk_psa/raw/latest/addons/io_import_scene_unreal_psa_psk_270.py">270 direct link</a>  
+<a href ="https://github.com/Befzz/blender3d_import_psk_psa/raw/latest/addons/io_import_scene_unreal_psa_psk_280.py">280 direct link</a>    
+  
+  
+Stable ( branch *master* ):  
 <a href ="https://github.com/Befzz/blender3d_import_psk_psa/raw/master/addons/io_import_scene_unreal_psa_psk_270.py">270 direct link</a>  
 <a href ="https://github.com/Befzz/blender3d_import_psk_psa/raw/master/addons/io_import_scene_unreal_psa_psk_280.py">280 direct link</a>  
+
 
 1. Add add-on:
 
