@@ -371,7 +371,7 @@ def pskimport(filepath,
         UV_by_face = [None] * chunk_datacount
         Faces = [None] * chunk_datacount
         
-        if len(Vertices) > 65536:
+        if len(Wedges) > 65536:
             unpack_format = '=IIIBBI'
         else:
             unpack_format = '=HHHBBI'
