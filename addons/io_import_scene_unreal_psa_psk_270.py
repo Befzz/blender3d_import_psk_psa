@@ -639,6 +639,10 @@ def pskimport(filepath,
             psk_bone.bone_index = counter
             psk_bone.parent_index = ParentIndex
             
+            # make sure we have valid parent_index
+            if psk_bone.parent_index < 0:
+                psk_bone.parent_index = 0
+
             # psk_bone.scale = (scale_x, scale_y, scale_z)
 
             # store bind pose to make it available for psa-import via CustomProperty of the Blender bone
