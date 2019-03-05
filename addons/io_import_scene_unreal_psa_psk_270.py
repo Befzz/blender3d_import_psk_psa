@@ -269,7 +269,7 @@ def pskimport(filepath,
         bImportmesh = True,
         bImportbone = True,
         bSpltiUVdata = False,
-        fBonesize = 2.0,
+        fBonesize = 5.0,
         fBonesizeRatio = 0.6,
         bDontInvertRoot = False,
         bReorientBones = False,
@@ -710,8 +710,10 @@ def pskimport(filepath,
         sum_bone_pos /= len(Bones) # average
         sum_bone_pos *= fBonesizeRatio # corrected
         
-        bone_size_choosen = max(0.01, min(sum_bone_pos, fBonesize))
-        
+        bone_size_choosen = max(0.01, round((min(sum_bone_pos, fBonesize))))
+
+        if not bReorientBones:
+            new_bone_size = bone_size_choosen
     #==================================================================================================
     # Skeleton. Build.
         for psk_bone in psk_bones:
@@ -729,7 +731,6 @@ def pskimport(filepath,
                 (new_bone_size, quat_orient_diff) = calc_bone_rotation(psk_bone, bone_size_choosen, bReorientDirectly, sum_bone_pos)
                 post_quat = psk_bone.orig_quat.conjugated() * quat_orient_diff
             else:
-                new_bone_size = bone_size_choosen
                 post_quat = psk_bone.orig_quat.conjugated()
             
             # only length of this vector is matter?
