@@ -608,6 +608,8 @@ def pskimport(filepath,
 
     #==================================================================================================
     # Prepare bone data
+    psk_bone_name_toolong = False
+
     def init_psk_bone(i, psk_bones, name_raw):
         psk_bone = class_psk_bone()
         psk_bone.children = []
@@ -638,7 +640,11 @@ def pskimport(filepath,
             
             psk_bone.bone_index = counter
             psk_bone.parent_index = ParentIndex
-            
+
+            if len(psk_bone.name) > 60:
+                psk_bone_name_toolong = True
+
+            # print(psk_bone.bone_index, psk_bone.parent_index, psk_bone.name)            
             # make sure we have valid parent_index
             if psk_bone.parent_index < 0:
                 psk_bone.parent_index = 0
@@ -716,8 +722,29 @@ def pskimport(filepath,
             new_bone_size = bone_size_choosen
     #==================================================================================================
     # Skeleton. Build.
+        if psk_bone_name_toolong:
+            for psk_bone in psk_bones:
+
+
+                # TODO too long name cutting options?
+                long_name = psk_bone.name
+                psk_bone.name = psk_bone.name[-60:]
+
+                edit_bone = armature_obj.data.edit_bones.new(psk_bone.name)
+                edit_bone["long_name"] = long_name
+
+                psk_bone.name = edit_bone.name
+
+                # print(psk_bone.name)
+                # print(edit_bone.name)
+        else:
+            for psk_bone in psk_bones:
+                edit_bone = armature_obj.data.edit_bones.new(psk_bone.name)
+                psk_bone.name = edit_bone.name
+
+
         for psk_bone in psk_bones:
-            edit_bone = armature_obj.data.edit_bones.new(psk_bone.name)
+            edit_bone = armature_obj.data.edit_bones[psk_bone.name]
 
             armature_obj.data.edit_bones.active = edit_bone
 
