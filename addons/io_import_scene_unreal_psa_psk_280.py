@@ -74,7 +74,6 @@ import time
 # from mathutils import *
 # from math import *
 
-is_blen_280 = True
 
 def util_obj_link(context, obj):
     # return bpy.context.scene_collection.objects.link(obj)
@@ -730,13 +729,8 @@ def pskimport(filepath,
         # TODO: options for axes and x_ray?
         armature_data.show_axes = False
 
-        if is_blen_280:
-            armature_data.display_type = 'STICK'
-            armature_obj.show_in_front = True
-        else:
-            armature_data.draw_type = 'STICK'
-            armature_obj.show_x_ray = True
-
+        armature_data.display_type = 'STICK'
+        armature_obj.show_in_front = True
 
         util_obj_link(context, armature_obj)
 
@@ -1512,8 +1506,7 @@ def psaimport(filepath,
         if not scene.is_nla_tweakmode:
             armature_obj.animation_data.action = first_action
     
-    if is_blen_280:
-        armature_obj.animation_data.action = first_action
+    armature_obj.animation_data.action = first_action
     
     if bUpdateTimelineRange:
 
@@ -1530,8 +1523,7 @@ def psaimport(filepath,
     util_obj_set_active(context, armature_obj)
     
     # 2.8 crashes
-    if not is_blen_280:
-        scene.frame_set(0)
+    # scene.frame_set(0)
 
 class PSKPSA_OT_show_message(bpy.types.Operator):
     bl_idname = "pskpsa.message"
@@ -1889,11 +1881,8 @@ def register():
     for cls in classes:
         register_class(cls)
         
-    if is_blen_280:
-        bpy.types.TOPBAR_MT_file_import.append(menu_import_draw)
-    else:
-        bpy.types.INFO_MT_file_import.append(menu_import_draw)
-    
+    bpy.types.TOPBAR_MT_file_import.append(menu_import_draw)
+
     bpy.types.Scene.pskpsa_import = PointerProperty(type = PskImportOptions)
     
 def unregister():
@@ -1901,11 +1890,8 @@ def unregister():
     for cls in classes:
         unregister_class(cls)
         
-    if is_blen_280:
-        bpy.types.TOPBAR_MT_file_import.append(menu_import_draw)
-    else:
-        bpy.types.INFO_MT_file_import.remove(menu_import_draw)
-    
+    bpy.types.TOPBAR_MT_file_import.remove(menu_import_draw)
+
     del bpy.types.Scene.pskpsa_import
     
 if __name__ == "__main__":
