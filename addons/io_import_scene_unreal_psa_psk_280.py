@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Import Unreal Skeleton Mesh (.psk)/Animation Set (.psa) (280)",
     "author": "Darknet, flufy3d, camg188, befzz",
-    "version": (2, 7, 9),
+    "version": (2, 7, 10),
     "blender": (2, 80, 0),
     "location": "File > Import > Skeleton Mesh (.psk)/Animation Set (.psa) OR View3D > Tool Shelf (key T) > Misc. tab",
     "description": "Import Skeleton Mesh / Animation Data",
@@ -1609,7 +1609,7 @@ class ImportProps():
     bDontInvertRoot : BoolProperty(
             name = "Don't invert root bone",
             description = " * Used by PSK and PSA.\n * Check it, if skeleton is badly oriented.",
-            default = False,
+            default = True,
             )
     bFilenameAsPrefix :  BoolProperty(
             name = "Prefix action names",
@@ -1647,7 +1647,7 @@ class ImportProps():
         sub = layout.row()
         # layout.prop(props, 'bDontInvertRoot', icon = 'ERROR' if props.bDontInvertRoot else 'NONE')
         sub.prop(props, 'bDontInvertRoot')
-        if props.bDontInvertRoot:
+        if not props.bDontInvertRoot:
             sub.label(text = "", icon = 'ERROR')
             
         layout.prop(props, 'fBonesizeRatio')
@@ -1825,7 +1825,7 @@ class IMPORT_OT_psa(bpy.types.Operator, ImportProps):
 
 class PSKPSA_PT_import_panel(bpy.types.Panel, ImportProps):
     bl_label = "PSK/PSA Import"
-    bl_idname = "VIEW3D_PT_udk_import"
+    bl_idname = "VIEW3D_PT_udk_import_280"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     bl_category = "PSK / PSA"
