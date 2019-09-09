@@ -22,18 +22,28 @@ https://github.com/gildor2/UModel</li>
 
 <h5>Known issues</h5>
 
-* `All actions to NLA track` is broken in 2.8
+* Option "`All actions to NLA track`" is broken in 2.8
 
 <h3>Installation</h3>  
 
-0. Download .py file ( <a href ="https://github.com/Befzz/blender3d_import_psk_psa/raw/master/addons/io_import_scene_unreal_psa_psk_280.py">direct link</a> )  
+0. Download .py file:  
+
+Current ( branch *latest* ):  
+<a href ="https://github.com/Befzz/blender3d_import_psk_psa/raw/latest/addons/io_import_scene_unreal_psa_psk_270.py">270 direct link</a>  
+<a href ="https://github.com/Befzz/blender3d_import_psk_psa/raw/latest/addons/io_import_scene_unreal_psa_psk_280.py">280 direct link</a>    
+  
+  
+Stable ( branch *master* ):  
+<a href ="https://github.com/Befzz/blender3d_import_psk_psa/raw/master/addons/io_import_scene_unreal_psa_psk_270.py">270 direct link</a>  
+<a href ="https://github.com/Befzz/blender3d_import_psk_psa/raw/master/addons/io_import_scene_unreal_psa_psk_280.py">280 direct link</a>  
+
 
 1. Add add-on:
 
 * From Blender  
  
   2.79: File -> User preferences -> Add-ons -> Install Add-on from File...  
-  2.80: Edit -> User preferences -> Add-ons -> Install Add-on from File...
+  2.80: Edit -> Preferences... -> Add-ons -> Install...
 
 * Manually  
 
@@ -45,11 +55,7 @@ https://github.com/gildor2/UModel</li>
 `Import Unreal Skeleton Mesh (.psk)/Animation Set (.psa)`
 3. Enable this one:  
 `Import Unreal Skeleton Mesh (.psk)/Animation Set (.psa) (280)`
-<h3>Usage (270)</h3>  
-
-1. In 3DView, press **T** (Toggle Toolbar)  
-2. Click **Misc.** tab.  
-
+<h3>Usage</h3>  
 <table><tbody>
 <tr><th> Panel in 3DView (270) </th><th> Panel in 3DView (280) </th></tr>
 <tr><td valign="top" align="center"><img src="https://github.com/Befzz/blender3d_import_psk_psa/blob/latest/imgs/270_psk.jpg"/></td>
