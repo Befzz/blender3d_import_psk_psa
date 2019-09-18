@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Import Unreal Skeleton Mesh (.psk)/Animation Set (.psa) (280)",
     "author": "Darknet, flufy3d, camg188, befzz",
-    "version": (2, 7, 10),
+    "version": (2, 7, 11),
     "blender": (2, 80, 0),
     "location": "File > Import > Skeleton Mesh (.psk)/Animation Set (.psa) OR View3D > Tool Shelf (key T) > Misc. tab",
     "description": "Import Skeleton Mesh / Animation Data",
@@ -293,9 +293,10 @@ def pskimport(filepath,
         bSpltiUVdata = False,
         fBonesize = 5.0,
         fBonesizeRatio = 0.6,
-        bDontInvertRoot = False,
+        bDontInvertRoot = True,
         bReorientBones = False,
         bReorientDirectly = False,
+        bScaleDown = True,
         error_callback = None):
     '''
     Import mesh and skeleton from .psk/.pskx files
@@ -410,9 +411,13 @@ def pskimport(filepath,
         
         unpack_data = Struct('3f').unpack_from
         
-        for counter in range( chunk_datacount ):
-            (vec_x, vec_y, vec_z) = unpack_data(chunk_data, counter * chunk_datasize)
-            Vertices[counter]  = (vec_x, vec_y, vec_z)
+        if bScaleDown:
+            for counter in range( chunk_datacount ):
+                (vec_x, vec_y, vec_z) = unpack_data(chunk_data, counter * chunk_datasize)
+                Vertices[counter]  = (vec_x*0.01, vec_y*0.01, vec_z*0.01)
+        else:
+            for counter in range( chunk_datacount ):
+                Vertices[counter]  =  unpack_data(chunk_data, counter * chunk_datasize)
             
             
     #================================================================================================== 
@@ -447,7 +452,8 @@ def pskimport(filepath,
             bImportbone = False
             
         if bImportbone:
-            unpack_data = Struct('64s3i11f').unpack_from
+            # unpack_data = Struct('64s3i11f').unpack_from
+            unpack_data = Struct('64s3i7f16x').unpack_from
         else:
             unpack_data = Struct('64s56x').unpack_from
             
@@ -651,9 +657,11 @@ def pskimport(filepath,
         
         for counter, (name_raw, flags, NumChildren, ParentIndex, #0 1 2 3
              quat_x, quat_y, quat_z, quat_w,            #4 5 6 7
-             vec_x, vec_y, vec_z,                       #8 9 10
-             joint_length,                              #11
-             scale_x, scale_y, scale_z) in enumerate(Bones):
+             vec_x, vec_y, vec_z
+            #  ,                       #8 9 10
+            #  joint_length,                              #11
+            #  scale_x, scale_y, scale_z
+             ) in enumerate(Bones):
         
             psk_bone = init_psk_bone(counter, psk_bones, name_raw)
             
@@ -665,10 +673,16 @@ def pskimport(filepath,
                 psk_bone.parent_index = 0
             
             # psk_bone.scale = (scale_x, scale_y, scale_z)
+            # print("%s: %03f %03f | %f" % (psk_bone.name, scale_x, scale_y, joint_length),scale_x)
+            # print("%s:" % (psk_bone.name), vec_x, quat_x)
 
             # store bind pose to make it available for psa-import via CustomProperty of the Blender bone
             psk_bone.orig_quat = Quaternion((quat_w, quat_x, quat_y, quat_z))
-            psk_bone.orig_loc = Vector((vec_x, vec_y, vec_z))
+
+            if bScaleDown:
+                psk_bone.orig_loc = Vector((vec_x * 0.01, vec_y * 0.01, vec_z * 0.01))
+            else:
+                psk_bone.orig_loc = Vector((vec_x, vec_y, vec_z))
 
             # root bone must have parent_index = 0 and selfindex = 0
             if psk_bone.parent_index == 0 and psk_bone.bone_index == psk_bone.parent_index:
@@ -744,7 +758,10 @@ def pskimport(filepath,
         sum_bone_pos /= len(Bones) # average
         sum_bone_pos *= fBonesizeRatio # corrected
         
-        bone_size_choosen = max(0.01, round((min(sum_bone_pos, fBonesize))))
+        # bone_size_choosen = max(0.01, round((min(sum_bone_pos, fBonesize))))
+        bone_size_choosen = max(0.01, round((min(sum_bone_pos, fBonesize))*100)/100)
+        # bone_size_choosen = max(0.01, min(sum_bone_pos, fBonesize))
+        # print("Bonesize %f | old: %f round: %f" % (bone_size_choosen, max(0.01, min(sum_bone_pos, fBonesize)),max(0.01, round((min(sum_bone_pos, fBonesize))*100)/100)))
 
         if not bReorientBones:
             new_bone_size = bone_size_choosen
@@ -1093,6 +1110,7 @@ def psaimport(filepath,
         bDontInvertRoot = False,
         bUpdateTimelineRange = False,
         bRotationOnly = False,
+        bScaleDown = True,
         fcurve_interpolation = 'LINEAR',
         error_callback = __pass
         ):
@@ -1309,7 +1327,10 @@ def psaimport(filepath,
          quat.x, quat.y, quat.z, quat.w
         ) = unpack_data( chunk_data, chunk_datasize * counter)
         
-        Raw_Key_List[counter] = (pos, quat)
+        if bScaleDown:
+            Raw_Key_List[counter] = (pos * 0.01, quat)
+        else:
+            Raw_Key_List[counter] = (pos, quat)
     
     psafile.close()
     
@@ -1506,7 +1527,7 @@ def psaimport(filepath,
         if not scene.is_nla_tweakmode:
             armature_obj.animation_data.action = first_action
     
-    armature_obj.animation_data.action = first_action
+    # armature_obj.animation_data.action = first_action
     
     if bUpdateTimelineRange:
 
@@ -1574,14 +1595,14 @@ class PSKPSA_OT_show_message(bpy.types.Operator):
 class ImportProps():
 
     fBonesize : FloatProperty(
-            name = "Orphan bone length",
-            description = "Maximum orphan bone length",
-            default = 5.0, min = 0.1, max = 50, step = 0.3, precision = 2,
+            name = "Alt. bone length.",
+            description = "Bone length will be set to this value IF it's less than [Corrected avg. bone length]\nBone length = min( <this value> , [Corrected avg. bone length] )",
+            default = 5.0, min = 0.01, max = 50, step = 0.3, precision = 2,
             )
     fBonesizeRatio : FloatProperty(
             name = "Bone length ratio",
-            description = "Bone length = [average bone length] * [this value]",
-            default = 0.6, min = 0.1, max = 4, step = 0.05, precision = 2,
+            description = "Bone length will be set to this value IF it's less than  Corrected avg. bone length = <this value> * [calculated average bone length]",
+            default = 0.4, min = 0.1, max = 4, step = 0.05, precision = 2,
             )
     bSpltiUVdata : BoolProperty(
             name = "Split UV data",
@@ -1608,17 +1629,17 @@ class ImportProps():
             )
     bDontInvertRoot : BoolProperty(
             name = "Don't invert root bone",
-            description = " * Used by PSK and PSA.\n * Check it, if skeleton is badly oriented.",
+            description = " * Used by PSK and PSA.\n * Uncheck it, if skeleton is badly oriented.",
             default = True,
             )
     bFilenameAsPrefix :  BoolProperty(
             name = "Prefix action names",
-            description = "Use filename as prefix for action name.",
+            description = "Use the filename as a prefix for the action name.",
             default = False,
             )
     bActionsToTrack : BoolProperty(
             name = "All actions to NLA track",
-            description = "Add all imported action to new NLAtrack. One by one.",
+            description = "Add all imported actions to new NLAtrack. One by one.\nLook at \"Nonlinear Animation\" editor.",
             default = False,
             )
     bUpdateTimelineRange : BoolProperty(
@@ -1630,6 +1651,11 @@ class ImportProps():
             name = "Rotation only",
             description = "Create only rotation keyframes.",
             default = False,
+            )
+    bScaleDown : BoolProperty(
+            name = "Scale down",
+            description = " * Used by PSK and PSA.\n * Multiply coordinates by 0.01\n * From \"cm.\" to \"m.\"",
+            default = True,
             )
             
     def draw_psk(self, context):
@@ -1650,6 +1676,7 @@ class ImportProps():
         if not props.bDontInvertRoot:
             sub.label(text = "", icon = 'ERROR')
             
+        layout.prop(props, 'bScaleDown')
         layout.prop(props, 'fBonesizeRatio')
         layout.prop(props, 'fBonesize')
         
@@ -1767,6 +1794,7 @@ class IMPORT_OT_psk(bpy.types.Operator, ImportProps):
                         bReorientBones = props.bReorientBones,
                         bReorientDirectly = props.bReorientDirectly,
                         bDontInvertRoot = props.bDontInvertRoot,
+                        bScaleDown = props.bScaleDown,
                         error_callback = util_ui_show_msg
                         )
 
@@ -1811,6 +1839,7 @@ class IMPORT_OT_psa(bpy.types.Operator, ImportProps):
             bDontInvertRoot = props.bDontInvertRoot,
             bUpdateTimelineRange = props.bUpdateTimelineRange,
             bRotationOnly = props.bRotationOnly,
+            bScaleDown = props.bScaleDown,
             error_callback = util_ui_show_msg
             )
         return {'FINISHED'}
