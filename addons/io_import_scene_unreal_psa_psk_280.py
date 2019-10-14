@@ -286,6 +286,16 @@ def util_check_file_header(file, ftype):
     return True
         
     
+def color_linear_to_srgb(c):
+    """
+    Convert from linear to sRGB color space.
+    Source: Cycles addon implementation, node_color.h.
+    """
+    if c < 0.0031308:
+        return 0.0 if c < 0.0 else c * 12.92
+    else:
+        return 1.055 * pow(c, 1.0 / 2.4) - 0.055
+        
 def pskimport(filepath,
         context = bpy.context,
         bImportmesh = True,
@@ -297,6 +307,7 @@ def pskimport(filepath,
         bReorientBones = False,
         bReorientDirectly = False,
         bScaleDown = True,
+        bToSRGB = True,
         error_callback = None):
     '''
     Import mesh and skeleton from .psk/.pskx files
@@ -341,6 +352,7 @@ def pskimport(filepath,
     Materials = None
     Bones = None
     Weights = None
+    VertexColors = None
     Extrauvs = []
         
     #================================================================================================== 
@@ -479,6 +491,19 @@ def pskimport(filepath,
         for counter in range(chunk_datacount):
             Weights[counter] = unpack_data(chunk_data, chunk_datasize * counter)
              
+    #================================================================================================== 
+    # Vertex colors. R G B A bytes. NOTE: it is Wedge color.(uses Wedges index)
+    def read_vertex_colors():
+    
+        nonlocal VertexColors
+        
+        unpack_data = Struct("=4B").unpack_from
+        
+        VertexColors = [None] * chunk_datacount
+        
+        for counter in range( chunk_datacount ):
+            VertexColors[counter] = unpack_data(chunk_data, chunk_datasize * counter) 
+            
     
     #================================================================================================== 
     # Extra UV. U | V
@@ -505,6 +530,7 @@ def pskimport(filepath,
         'REFSKEL0': read_bones, #?
         'RAWW0000': read_weights,
         'RAWWEIGH': read_weights,
+        'VERTEXCO': read_vertex_colors, # VERTEXCOLOR
         'EXTRAUVS': read_extrauvs
     }
     
@@ -973,6 +999,46 @@ def pskimport(filepath,
                     
                 uvLayer.data[loopId].uv = uv
 
+    #==================================================================================================
+    # VertexColors
+    
+        if VertexColors is not None:
+        
+            vtx_color_layer = mesh_data.vertex_colors.new(name = "PSKVTXCOL_0", do_init = False)
+            
+            pervertex = [None] * len(Vertices)
+            
+            for counter, (vertexid,_,_,_) in enumerate(Wedges):
+            
+                # Is it possible ?
+                if (pervertex[vertexid] is not None) and (pervertex[vertexid] != VertexColors[counter]):
+                    print('Not equal vertex colors. ', vertexid, pervertex[vertexid], VertexColors[counter])
+                
+                pervertex[vertexid] = VertexColors[counter]
+            
+            
+            for counter, loop in enumerate(mesh_data.loops):
+            
+                color = pervertex[ loop.vertex_index ]
+                
+                if color is None:
+                    vtx_color_layer.data[ counter ].color = (1.,1.,1.,1.)
+                else:
+                    if bToSRGB:
+                        vtx_color_layer.data[ counter ].color = (
+                            color_linear_to_srgb(color[0] / 255),
+                            color_linear_to_srgb(color[1] / 255),
+                            color_linear_to_srgb(color[2] / 255),
+                            color[3] / 255
+                        )
+                    else:
+                        vtx_color_layer.data[ counter ].color = (
+                            color[0] / 255,
+                            color[1] / 255,
+                            color[2] / 255,
+                            color[3] / 255
+                        )
+                        
     #===================================================================================================
     # Extra UVs. Set.
         
@@ -1657,6 +1723,11 @@ class ImportProps():
             description = " * Used by PSK and PSA.\n * Multiply coordinates by 0.01\n * From \"cm.\" to \"m.\"",
             default = True,
             )
+    bToSRGB : BoolProperty(
+            name = "sRGB vertex color",
+            description = "Apply 'linear RGB -> sRGB' conversion over vertex colors",
+            default = True,
+            )
             
     def draw_psk(self, context):
         props = bpy.context.scene.pskpsa_import
@@ -1677,6 +1748,7 @@ class ImportProps():
             sub.label(text = "", icon = 'ERROR')
             
         layout.prop(props, 'bScaleDown')
+        layout.prop(props, 'bToSRGB')
         layout.prop(props, 'fBonesizeRatio')
         layout.prop(props, 'fBonesize')
         
@@ -1795,6 +1867,7 @@ class IMPORT_OT_psk(bpy.types.Operator, ImportProps):
                         bReorientDirectly = props.bReorientDirectly,
                         bDontInvertRoot = props.bDontInvertRoot,
                         bScaleDown = props.bScaleDown,
+                        bToSRGB = props.bToSRGB,
                         error_callback = util_ui_show_msg
                         )
 
