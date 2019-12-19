@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Import Unreal Skeleton Mesh (.psk)/Animation Set (.psa) (280)",
     "author": "Darknet, flufy3d, camg188, befzz",
-    "version": (2, 7, 11),
+    "version": (2, 7, 12),
     "blender": (2, 80, 0),
     "location": "File > Import > Skeleton Mesh (.psk)/Animation Set (.psa) OR View3D > Tool Shelf (key T) > Misc. tab",
     "description": "Import Skeleton Mesh / Animation Data",
@@ -1291,6 +1291,7 @@ def psaimport(filepath,
     BoneNotFoundList = []
     BonesWithoutAnimation = []
     PsaBonesToProcess = [None] * chunk_datacount
+    BonePsaImportedNames = []
 
     # printlog("Name\tFlgs\tNumChld\tPrntIdx\tQx\tQy\tQz\tQw\tLocX\tLocY\tLocZ\tLength\tXSize\tYSize\tZSize\n")
 
@@ -1316,12 +1317,31 @@ def psaimport(filepath,
         if in_name_lowered in skeleton_bones_lowered:
             orig_name = skeleton_bones_lowered[in_name_lowered]
             
+            count_duplicates = BonePsaImportedNames.count( in_name_lowered )
+
+            if count_duplicates > 0:
+
+                duplicate_name_numbered = in_name_lowered + ('.%03d' % count_duplicates)
+
+                # print('Dup:', in_name_lowered, '~',duplicate_name_numbered)
+
+                # Skeleton have duplicate name too?
+                if duplicate_name_numbered in skeleton_bones_lowered:
+                    orig_name = orig_name + ('.%03d' % count_duplicates)
+                else:
+                    # Skip animation import for that bone
+                    print(" PSK do not have numbered duplicate name(but PSA have!):", duplicate_name_numbered)
+                    BonePsaImportedNames.append(in_name_lowered)
+                    continue
+                    
+                
             # use a skeleton bone name 
             BoneIndex2Name[counter] = orig_name
             PsaBonesToProcess[counter] = new_psa_bone(armature_obj.data.bones[orig_name], 
-                                                      armature_obj.pose.bones[orig_name])
+                                                    armature_obj.pose.bones[orig_name])
+            BonePsaImportedNames.append(in_name_lowered)
         else:
-            # print("Can't find the bone:", bonename)
+            # print("Can't find the bone:", orig_name, in_name_lowered)
             BoneNotFoundList.append(counter)
             
     
