@@ -268,7 +268,7 @@ def calc_bone_rotation(psk_bone, bone_len, bDirectly, avg_bone_len):
     
     vec_to_axis_vec(sumvec, axis_vec)
     psk_bone.axis_vec = axis_vec
-    return (sumlen, vecy.rotation_difference(axis_vec))
+    return (sumlen, vecy.rotation_difference(axis_vec)/fScale)
 
     
 def __pass(*args,**kwargs):
@@ -291,9 +291,11 @@ def pskimport(filepath,
         context = bpy.context,
         bImportmesh = True,
         bImportbone = True,
+        bSmooth = None,
         bSpltiUVdata = False,
         fBonesize = 2.0,
         fBonesizeRatio = 0.6,
+        fScale = 1.0,
         bDontInvertRoot = False,
         bReorientBones = False,
         bReorientDirectly = False,
@@ -413,7 +415,7 @@ def pskimport(filepath,
         
         for counter in range( chunk_datacount ):
             (vec_x, vec_y, vec_z) = unpack_data(chunk_data, counter * chunk_datasize)
-            Vertices[counter]  = (vec_x, vec_y, vec_z)
+            Vertices[counter]  = (vec_x/fScale, vec_y/fScale, vec_z/fScale)
             
             
     #================================================================================================== 
@@ -665,7 +667,7 @@ def pskimport(filepath,
 
             # store bind pose to make it available for psa-import via CustomProperty of the Blender bone
             psk_bone.orig_quat = Quaternion((quat_w, quat_x, quat_y, quat_z))
-            psk_bone.orig_loc = Vector((vec_x, vec_y, vec_z))
+            psk_bone.orig_loc = Vector((vec_x/fScale, vec_y/fScale, vec_z/fScale))
 
             # root bone must have parent_index = 0 and selfindex = 0
             if psk_bone.parent_index == 0 and psk_bone.bone_index == psk_bone.parent_index:
@@ -1013,8 +1015,15 @@ def pskimport(filepath,
     
         util_obj_link(context, mesh_obj)
         util_select_all(False)
-        
-            
+        util_obj_select(context, mesh_obj)
+        #Shade Smooth or Flat
+        if bSmooth == None:
+            pass
+        elif bSmooth == True:
+            bpy.ops.object.shade_smooth()
+        else:
+            bpy.ops.object.shade_flat()
+        util_select_all(False)
         if not bImportbone:   
         
             util_obj_select(context, mesh_obj)
@@ -1027,7 +1036,7 @@ def pskimport(filepath,
             # parenting mesh to armature object
             mesh_obj.parent = armature_obj
             mesh_obj.parent_type = 'OBJECT'
-            
+
             # add armature modifier
             blender_modifier = mesh_obj.modifiers.new( armature_obj.data.name, type = 'ARMATURE')
             blender_modifier.show_expanded = False
@@ -1040,7 +1049,7 @@ def pskimport(filepath,
             util_obj_select(context, armature_obj)
             util_obj_set_active(context, armature_obj)
     
-    # print("Done: %f sec." % (time.process_time() - ref_time))
+    #print("Done: %f sec." % (time.process_time() - ref_time))
     utils_set_mode('OBJECT')
     return True
 
@@ -1578,6 +1587,11 @@ class ImportProps():
             description = "Bone length = [average bone length] * [this value]",
             default = 0.6, min = 0.1, max = 4, step = 0.05, precision = 2,
             )
+    fScale : FloatProperty(
+            name = "Scale",
+            description = "What every output value will be divided by",
+            default = 1.0, min=0.1, max = 100, step = 1, precision = 2,
+            )
     bSpltiUVdata : BoolProperty(
             name = "Split UV data",
             description = "Try to place UV points(coords) to different UV maps, according to material index of the Wedge(UV-Vertex-MateralIndex)."\
@@ -1594,7 +1608,12 @@ class ImportProps():
             name = "Reorient directly",
             description = "Directly to children.\n * Axes will not be preserved.\n * Orphan bones - in direction from parent head\n * With only one non-orphan bone - to that one.",
             default = False,
-            ) 
+            )
+    shade : EnumProperty(
+            name = "Shading",
+            items = (('Smooth','Smooth','Shade Smooth'),
+                     ('Flat', 'Flat', 'Shade Flat'))
+            )
     import_mode : EnumProperty(
             name = "Import mode.",
             items = (('All','All','Import mesh and skeleton'),
@@ -1626,6 +1645,7 @@ class ImportProps():
         props = bpy.context.scene.pskpsa_import
         layout = self.layout
         layout.prop(props, 'import_mode', expand = True)
+        layout.prop(props, 'shade',expand=True)
         layout.prop(props, 'bReorientBones')
         
         sub = layout.row()
@@ -1642,6 +1662,7 @@ class ImportProps():
             
         layout.prop(props, 'fBonesizeRatio')
         layout.prop(props, 'fBonesize')
+        layout.prop(props, 'fScale')
         
     def draw_psa(self, context):
         props = context.scene.pskpsa_import
@@ -1741,7 +1762,12 @@ class IMPORT_OT_psk(bpy.types.Operator, ImportProps):
         else:
             bImportmesh = True
             bImportbone = True
-        
+        if props.shade == 'Flat':
+            bSmooth=False
+        elif props.shade == 'Smooth':
+            bSmooth=True
+        else:
+            bSmooth=None
         no_errors = True
         
         for f in enumerate(self.files):
@@ -1750,8 +1776,10 @@ class IMPORT_OT_psk(bpy.types.Operator, ImportProps):
                         fpath,
                         context = context,
                         bImportmesh = bImportmesh, bImportbone = bImportbone,
+                        bSmooth = bSmooth,
                         fBonesize = props.fBonesize,
                         fBonesizeRatio = props.fBonesizeRatio,
+                        fScale = props.fScale,
                         bSpltiUVdata = props.bSpltiUVdata,
                         bReorientBones = props.bReorientBones,
                         bReorientDirectly = props.bReorientDirectly,
