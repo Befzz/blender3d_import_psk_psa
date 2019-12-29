@@ -268,7 +268,7 @@ def calc_bone_rotation(psk_bone, bone_len, bDirectly, avg_bone_len):
     
     vec_to_axis_vec(sumvec, axis_vec)
     psk_bone.axis_vec = axis_vec
-    return (sumlen, vecy.rotation_difference(axis_vec)/fScale)
+    return (sumlen, vecy.rotation_difference(axis_vec))
 
     
 def __pass(*args,**kwargs):
