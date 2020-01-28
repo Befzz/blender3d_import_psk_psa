@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Import Unreal Skeleton Mesh (.psk)/Animation Set (.psa) (280)",
     "author": "Darknet, flufy3d, camg188, befzz",
-    "version": (2, 7, 12),
+    "version": (2, 7, 13),
     "blender": (2, 80, 0),
     "location": "File > Import > Skeleton Mesh (.psk)/Animation Set (.psa) OR View3D > Tool Shelf (key T) > Misc. tab",
     "description": "Import Skeleton Mesh / Animation Data",
@@ -354,6 +354,7 @@ def pskimport(filepath,
     Weights = None
     VertexColors = None
     Extrauvs = []
+    WedgeIdx_by_faceIdx = None
         
     #================================================================================================== 
     # Materials   MaterialNameRaw | TextureIndex | PolyFlags | AuxMaterial | AuxFlags |  LodBias | LodStyle 
@@ -378,10 +379,11 @@ def pskimport(filepath,
         if not bImportmesh:
             return True
         
-        nonlocal Faces, UV_by_face
+        nonlocal Faces, UV_by_face, WedgeIdx_by_faceIdx
 
         UV_by_face = [None] * chunk_datacount
         Faces = [None] * chunk_datacount
+        WedgeIdx_by_faceIdx = [None] * chunk_datacount
         
         if len(Wedges) > 65536:
             unpack_format = '=IIIBBI'
@@ -402,13 +404,21 @@ def pskimport(filepath,
             ((vertid0, u0, v0, matid0), (vertid1, u1, v1, matid1), (vertid2, u2, v2, matid2)) = Wedges[WdgIdx1], Wedges[WdgIdx2], Wedges[WdgIdx3]
             
             # note order: C,B,A
-            Faces[counter] = (vertid2,  vertid1, vertid0)
+            # Faces[counter] = (vertid2,  vertid1, vertid0)
+
+            Faces[counter] = (vertid1,  vertid0, vertid2)
+            # Faces[counter] = (vertid1,  vertid2, vertid0)
+            # Faces[counter] = (vertid0,  vertid1, vertid2)
             
-            uv = ( ( u2, 1.0 - v2 ), ( u1, 1.0 - v1 ), ( u0, 1.0 - v0 ) )
+            # uv = ( ( u2, 1.0 - v2 ), ( u1, 1.0 - v1 ), ( u0, 1.0 - v0 ) )
+            uv = ( ( u1, 1.0 - v1 ), ( u0, 1.0 - v0 ), ( u2, 1.0 - v2 ) )
             
             # Mapping: FaceIndex <=> UV data <=> FaceMatIndex
             UV_by_face[counter] = (uv, MatIndex, (matid2, matid1, matid0))
             
+            # We need this for EXTRA UVs
+            WedgeIdx_by_faceIdx[counter] = (WdgIdx3, WdgIdx2, WdgIdx1)
+
             
     #==================================================================================================
     # Vertices X | Y | Z
@@ -427,6 +437,8 @@ def pskimport(filepath,
             for counter in range( chunk_datacount ):
                 (vec_x, vec_y, vec_z) = unpack_data(chunk_data, counter * chunk_datasize)
                 Vertices[counter]  = (vec_x*0.01, vec_y*0.01, vec_z*0.01)
+                # equal to gltf
+                # Vertices[counter]  = (vec_x*0.01, vec_z*0.01, -vec_y*0.01)
         else:
             for counter in range( chunk_datacount ):
                 Vertices[counter]  =  unpack_data(chunk_data, counter * chunk_datasize)
@@ -1042,13 +1054,29 @@ def pskimport(filepath,
     #===================================================================================================
     # Extra UVs. Set.
         
-        for counter, uv_data in enumerate(Extrauvs):
+        # for counter, uv_data in enumerate(Extrauvs):
         
+        #     uvLayer = mesh_data.uv_layers[ counter - len(Extrauvs) ]
+            
+        #     for uv_index, uv_coords in enumerate(uv_data):
+            
+        #         uvLayer.data[uv_index].uv = (uv_coords[0], 1.0 - uv_coords[1])
+
+
+        for counter, uv_data in enumerate(Extrauvs):
+
             uvLayer = mesh_data.uv_layers[ counter - len(Extrauvs) ]
-            
-            for uv_index, uv_coords in enumerate(uv_data):
-            
-                uvLayer.data[uv_index].uv = (uv_coords[0], 1.0 - uv_coords[1])
+
+            for faceIdx, (WedgeIdx3,WedgeIdx2,WedgeIdx1) in enumerate(WedgeIdx_by_faceIdx):
+                
+                # equal to gltf
+                uvLayer.data[faceIdx*3  ].uv = (uv_data[WedgeIdx2][0], 1.0 - uv_data[WedgeIdx2][1])
+                uvLayer.data[faceIdx*3+1].uv = (uv_data[WedgeIdx1][0], 1.0 - uv_data[WedgeIdx1][1])
+                uvLayer.data[faceIdx*3+2].uv = (uv_data[WedgeIdx3][0], 1.0 - uv_data[WedgeIdx3][1])
+                # uvLayer.data[faceIdx*3  ].uv = (uv_data[WedgeIdx3][0], 1.0 - uv_data[WedgeIdx3][1])
+                # uvLayer.data[faceIdx*3+1].uv = (uv_data[WedgeIdx2][0], 1.0 - uv_data[WedgeIdx2][1])
+                # uvLayer.data[faceIdx*3+2].uv = (uv_data[WedgeIdx1][0], 1.0 - uv_data[WedgeIdx1][1])
+        
                 
     #===================================================================================================
     # Mesh. Vertex Groups. Bone Weights.
