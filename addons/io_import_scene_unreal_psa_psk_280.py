@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Import Unreal Skeleton Mesh (.psk)/Animation Set (.psa) (280)",
     "author": "Darknet, flufy3d, camg188, befzz",
-    "version": (2, 7, 8),
+    "version": (2, 7, 13),
     "blender": (2, 80, 0),
     "location": "File > Import > Skeleton Mesh (.psk)/Animation Set (.psa) OR View3D > Tool Shelf (key T) > Misc. tab",
     "description": "Import Skeleton Mesh / Animation Data",
@@ -74,7 +74,6 @@ import time
 # from mathutils import *
 # from math import *
 
-is_blen_280 = True
 
 def util_obj_link(context, obj):
     # return bpy.context.scene_collection.objects.link(obj)
@@ -287,16 +286,28 @@ def util_check_file_header(file, ftype):
     return True
         
     
+def color_linear_to_srgb(c):
+    """
+    Convert from linear to sRGB color space.
+    Source: Cycles addon implementation, node_color.h.
+    """
+    if c < 0.0031308:
+        return 0.0 if c < 0.0 else c * 12.92
+    else:
+        return 1.055 * pow(c, 1.0 / 2.4) - 0.055
+        
 def pskimport(filepath,
         context = bpy.context,
         bImportmesh = True,
         bImportbone = True,
         bSpltiUVdata = False,
-        fBonesize = 2.0,
+        fBonesize = 5.0,
         fBonesizeRatio = 0.6,
-        bDontInvertRoot = False,
+        bDontInvertRoot = True,
         bReorientBones = False,
         bReorientDirectly = False,
+        bScaleDown = True,
+        bToSRGB = True,
         error_callback = None):
     '''
     Import mesh and skeleton from .psk/.pskx files
@@ -341,7 +352,9 @@ def pskimport(filepath,
     Materials = None
     Bones = None
     Weights = None
+    VertexColors = None
     Extrauvs = []
+    WedgeIdx_by_faceIdx = None
         
     #================================================================================================== 
     # Materials   MaterialNameRaw | TextureIndex | PolyFlags | AuxMaterial | AuxFlags |  LodBias | LodStyle 
@@ -366,12 +379,13 @@ def pskimport(filepath,
         if not bImportmesh:
             return True
         
-        nonlocal Faces, UV_by_face
+        nonlocal Faces, UV_by_face, WedgeIdx_by_faceIdx
 
         UV_by_face = [None] * chunk_datacount
         Faces = [None] * chunk_datacount
+        WedgeIdx_by_faceIdx = [None] * chunk_datacount
         
-        if len(Vertices) > 65536:
+        if len(Wedges) > 65536:
             unpack_format = '=IIIBBI'
         else:
             unpack_format = '=HHHBBI'
@@ -390,13 +404,21 @@ def pskimport(filepath,
             ((vertid0, u0, v0, matid0), (vertid1, u1, v1, matid1), (vertid2, u2, v2, matid2)) = Wedges[WdgIdx1], Wedges[WdgIdx2], Wedges[WdgIdx3]
             
             # note order: C,B,A
-            Faces[counter] = (vertid2,  vertid1, vertid0)
+            # Faces[counter] = (vertid2,  vertid1, vertid0)
+
+            Faces[counter] = (vertid1,  vertid0, vertid2)
+            # Faces[counter] = (vertid1,  vertid2, vertid0)
+            # Faces[counter] = (vertid0,  vertid1, vertid2)
             
-            uv = ( ( u2, 1.0 - v2 ), ( u1, 1.0 - v1 ), ( u0, 1.0 - v0 ) )
+            # uv = ( ( u2, 1.0 - v2 ), ( u1, 1.0 - v1 ), ( u0, 1.0 - v0 ) )
+            uv = ( ( u1, 1.0 - v1 ), ( u0, 1.0 - v0 ), ( u2, 1.0 - v2 ) )
             
             # Mapping: FaceIndex <=> UV data <=> FaceMatIndex
             UV_by_face[counter] = (uv, MatIndex, (matid2, matid1, matid0))
             
+            # We need this for EXTRA UVs
+            WedgeIdx_by_faceIdx[counter] = (WdgIdx3, WdgIdx2, WdgIdx1)
+
             
     #==================================================================================================
     # Vertices X | Y | Z
@@ -411,9 +433,15 @@ def pskimport(filepath,
         
         unpack_data = Struct('3f').unpack_from
         
-        for counter in range( chunk_datacount ):
-            (vec_x, vec_y, vec_z) = unpack_data(chunk_data, counter * chunk_datasize)
-            Vertices[counter]  = (vec_x, vec_y, vec_z)
+        if bScaleDown:
+            for counter in range( chunk_datacount ):
+                (vec_x, vec_y, vec_z) = unpack_data(chunk_data, counter * chunk_datasize)
+                Vertices[counter]  = (vec_x*0.01, vec_y*0.01, vec_z*0.01)
+                # equal to gltf
+                # Vertices[counter]  = (vec_x*0.01, vec_z*0.01, -vec_y*0.01)
+        else:
+            for counter in range( chunk_datacount ):
+                Vertices[counter]  =  unpack_data(chunk_data, counter * chunk_datasize)
             
             
     #================================================================================================== 
@@ -448,7 +476,8 @@ def pskimport(filepath,
             bImportbone = False
             
         if bImportbone:
-            unpack_data = Struct('64s3i11f').unpack_from
+            # unpack_data = Struct('64s3i11f').unpack_from
+            unpack_data = Struct('64s3i7f16x').unpack_from
         else:
             unpack_data = Struct('64s56x').unpack_from
             
@@ -474,6 +503,19 @@ def pskimport(filepath,
         for counter in range(chunk_datacount):
             Weights[counter] = unpack_data(chunk_data, chunk_datasize * counter)
              
+    #================================================================================================== 
+    # Vertex colors. R G B A bytes. NOTE: it is Wedge color.(uses Wedges index)
+    def read_vertex_colors():
+    
+        nonlocal VertexColors
+        
+        unpack_data = Struct("=4B").unpack_from
+        
+        VertexColors = [None] * chunk_datacount
+        
+        for counter in range( chunk_datacount ):
+            VertexColors[counter] = unpack_data(chunk_data, chunk_datasize * counter) 
+            
     
     #================================================================================================== 
     # Extra UV. U | V
@@ -500,6 +542,7 @@ def pskimport(filepath,
         'REFSKEL0': read_bones, #?
         'RAWW0000': read_weights,
         'RAWWEIGH': read_weights,
+        'VERTEXCO': read_vertex_colors, # VERTEXCOLOR
         'EXTRAUVS': read_extrauvs
     }
     
@@ -652,20 +695,32 @@ def pskimport(filepath,
         
         for counter, (name_raw, flags, NumChildren, ParentIndex, #0 1 2 3
              quat_x, quat_y, quat_z, quat_w,            #4 5 6 7
-             vec_x, vec_y, vec_z,                       #8 9 10
-             joint_length,                              #11
-             scale_x, scale_y, scale_z) in enumerate(Bones):
+             vec_x, vec_y, vec_z
+            #  ,                       #8 9 10
+            #  joint_length,                              #11
+            #  scale_x, scale_y, scale_z
+             ) in enumerate(Bones):
         
             psk_bone = init_psk_bone(counter, psk_bones, name_raw)
             
             psk_bone.bone_index = counter
             psk_bone.parent_index = ParentIndex
             
+            # make sure we have valid parent_index
+            if psk_bone.parent_index < 0:
+                psk_bone.parent_index = 0
+            
             # psk_bone.scale = (scale_x, scale_y, scale_z)
+            # print("%s: %03f %03f | %f" % (psk_bone.name, scale_x, scale_y, joint_length),scale_x)
+            # print("%s:" % (psk_bone.name), vec_x, quat_x)
 
             # store bind pose to make it available for psa-import via CustomProperty of the Blender bone
             psk_bone.orig_quat = Quaternion((quat_w, quat_x, quat_y, quat_z))
-            psk_bone.orig_loc = Vector((vec_x, vec_y, vec_z))
+
+            if bScaleDown:
+                psk_bone.orig_loc = Vector((vec_x * 0.01, vec_y * 0.01, vec_z * 0.01))
+            else:
+                psk_bone.orig_loc = Vector((vec_x, vec_y, vec_z))
 
             # root bone must have parent_index = 0 and selfindex = 0
             if psk_bone.parent_index == 0 and psk_bone.bone_index == psk_bone.parent_index:
@@ -726,13 +781,8 @@ def pskimport(filepath,
         # TODO: options for axes and x_ray?
         armature_data.show_axes = False
 
-        if is_blen_280:
-            armature_data.display_type = 'STICK'
-            armature_obj.show_in_front = True
-        else:
-            armature_data.draw_type = 'STICK'
-            armature_obj.show_x_ray = True
-
+        armature_data.display_type = 'STICK'
+        armature_obj.show_in_front = True
 
         util_obj_link(context, armature_obj)
 
@@ -746,7 +796,13 @@ def pskimport(filepath,
         sum_bone_pos /= len(Bones) # average
         sum_bone_pos *= fBonesizeRatio # corrected
         
-        bone_size_choosen = max(0.01, min(sum_bone_pos, fBonesize))
+        # bone_size_choosen = max(0.01, round((min(sum_bone_pos, fBonesize))))
+        bone_size_choosen = max(0.01, round((min(sum_bone_pos, fBonesize))*100)/100)
+        # bone_size_choosen = max(0.01, min(sum_bone_pos, fBonesize))
+        # print("Bonesize %f | old: %f round: %f" % (bone_size_choosen, max(0.01, min(sum_bone_pos, fBonesize)),max(0.01, round((min(sum_bone_pos, fBonesize))*100)/100)))
+
+        if not bReorientBones:
+            new_bone_size = bone_size_choosen
         
     #==================================================================================================
     # Skeleton. Build.
@@ -769,7 +825,6 @@ def pskimport(filepath,
                 post_quat = quat_orient_diff
                 post_quat.rotate( psk_bone.orig_quat.conjugated() )
             else:
-                new_bone_size = bone_size_choosen
                 post_quat = psk_bone.orig_quat.conjugated()
             
             # only length of this vector is matter?
@@ -956,16 +1011,72 @@ def pskimport(filepath,
                     
                 uvLayer.data[loopId].uv = uv
 
+    #==================================================================================================
+    # VertexColors
+    
+        if VertexColors is not None:
+        
+            vtx_color_layer = mesh_data.vertex_colors.new(name = "PSKVTXCOL_0", do_init = False)
+            
+            pervertex = [None] * len(Vertices)
+            
+            for counter, (vertexid,_,_,_) in enumerate(Wedges):
+            
+                # Is it possible ?
+                if (pervertex[vertexid] is not None) and (pervertex[vertexid] != VertexColors[counter]):
+                    print('Not equal vertex colors. ', vertexid, pervertex[vertexid], VertexColors[counter])
+                
+                pervertex[vertexid] = VertexColors[counter]
+            
+            
+            for counter, loop in enumerate(mesh_data.loops):
+            
+                color = pervertex[ loop.vertex_index ]
+                
+                if color is None:
+                    vtx_color_layer.data[ counter ].color = (1.,1.,1.,1.)
+                else:
+                    if bToSRGB:
+                        vtx_color_layer.data[ counter ].color = (
+                            color_linear_to_srgb(color[0] / 255),
+                            color_linear_to_srgb(color[1] / 255),
+                            color_linear_to_srgb(color[2] / 255),
+                            color[3] / 255
+                        )
+                    else:
+                        vtx_color_layer.data[ counter ].color = (
+                            color[0] / 255,
+                            color[1] / 255,
+                            color[2] / 255,
+                            color[3] / 255
+                        )
+                        
     #===================================================================================================
     # Extra UVs. Set.
         
-        for counter, uv_data in enumerate(Extrauvs):
+        # for counter, uv_data in enumerate(Extrauvs):
         
+        #     uvLayer = mesh_data.uv_layers[ counter - len(Extrauvs) ]
+            
+        #     for uv_index, uv_coords in enumerate(uv_data):
+            
+        #         uvLayer.data[uv_index].uv = (uv_coords[0], 1.0 - uv_coords[1])
+
+
+        for counter, uv_data in enumerate(Extrauvs):
+
             uvLayer = mesh_data.uv_layers[ counter - len(Extrauvs) ]
-            
-            for uv_index, uv_coords in enumerate(uv_data):
-            
-                uvLayer.data[uv_index].uv = (uv_coords[0], 1.0 - uv_coords[1])
+
+            for faceIdx, (WedgeIdx3,WedgeIdx2,WedgeIdx1) in enumerate(WedgeIdx_by_faceIdx):
+                
+                # equal to gltf
+                uvLayer.data[faceIdx*3  ].uv = (uv_data[WedgeIdx2][0], 1.0 - uv_data[WedgeIdx2][1])
+                uvLayer.data[faceIdx*3+1].uv = (uv_data[WedgeIdx1][0], 1.0 - uv_data[WedgeIdx1][1])
+                uvLayer.data[faceIdx*3+2].uv = (uv_data[WedgeIdx3][0], 1.0 - uv_data[WedgeIdx3][1])
+                # uvLayer.data[faceIdx*3  ].uv = (uv_data[WedgeIdx3][0], 1.0 - uv_data[WedgeIdx3][1])
+                # uvLayer.data[faceIdx*3+1].uv = (uv_data[WedgeIdx2][0], 1.0 - uv_data[WedgeIdx2][1])
+                # uvLayer.data[faceIdx*3+2].uv = (uv_data[WedgeIdx1][0], 1.0 - uv_data[WedgeIdx1][1])
+        
                 
     #===================================================================================================
     # Mesh. Vertex Groups. Bone Weights.
@@ -1092,6 +1203,8 @@ def psaimport(filepath,
         first_frames = 0,
         bDontInvertRoot = False,
         bUpdateTimelineRange = False,
+        bRotationOnly = False,
+        bScaleDown = True,
         fcurve_interpolation = 'LINEAR',
         error_callback = __pass
         ):
@@ -1206,6 +1319,7 @@ def psaimport(filepath,
     BoneNotFoundList = []
     BonesWithoutAnimation = []
     PsaBonesToProcess = [None] * chunk_datacount
+    BonePsaImportedNames = []
 
     # printlog("Name\tFlgs\tNumChld\tPrntIdx\tQx\tQy\tQz\tQw\tLocX\tLocY\tLocZ\tLength\tXSize\tYSize\tZSize\n")
 
@@ -1231,12 +1345,31 @@ def psaimport(filepath,
         if in_name_lowered in skeleton_bones_lowered:
             orig_name = skeleton_bones_lowered[in_name_lowered]
             
+            count_duplicates = BonePsaImportedNames.count( in_name_lowered )
+
+            if count_duplicates > 0:
+
+                duplicate_name_numbered = in_name_lowered + ('.%03d' % count_duplicates)
+
+                # print('Dup:', in_name_lowered, '~',duplicate_name_numbered)
+
+                # Skeleton have duplicate name too?
+                if duplicate_name_numbered in skeleton_bones_lowered:
+                    orig_name = orig_name + ('.%03d' % count_duplicates)
+                else:
+                    # Skip animation import for that bone
+                    print(" PSK do not have numbered duplicate name(but PSA have!):", duplicate_name_numbered)
+                    BonePsaImportedNames.append(in_name_lowered)
+                    continue
+                    
+                
             # use a skeleton bone name 
             BoneIndex2Name[counter] = orig_name
             PsaBonesToProcess[counter] = new_psa_bone(armature_obj.data.bones[orig_name], 
-                                                      armature_obj.pose.bones[orig_name])
+                                                    armature_obj.pose.bones[orig_name])
+            BonePsaImportedNames.append(in_name_lowered)
         else:
-            # print("Can't find the bone:", bonename)
+            # print("Can't find the bone:", orig_name, in_name_lowered)
             BoneNotFoundList.append(counter)
             
     
@@ -1308,7 +1441,10 @@ def psaimport(filepath,
          quat.x, quat.y, quat.z, quat.w
         ) = unpack_data( chunk_data, chunk_datasize * counter)
         
-        Raw_Key_List[counter] = (pos, quat)
+        if bScaleDown:
+            Raw_Key_List[counter] = (pos * 0.01, quat)
+        else:
+            Raw_Key_List[counter] = (pos, quat)
     
     psafile.close()
     
@@ -1369,10 +1505,11 @@ def psaimport(filepath,
             psa_bone.fcurve_quat_y = action.fcurves.new(data_path, index = 2)
             psa_bone.fcurve_quat_z = action.fcurves.new(data_path, index = 3)
         
-            data_path = pose_bone.path_from_id("location")
-            psa_bone.fcurve_loc_x = action.fcurves.new(data_path, index = 0)
-            psa_bone.fcurve_loc_y = action.fcurves.new(data_path, index = 1)
-            psa_bone.fcurve_loc_z = action.fcurves.new(data_path, index = 2)
+            if not bRotationOnly:
+                data_path = pose_bone.path_from_id("location")
+                psa_bone.fcurve_loc_x = action.fcurves.new(data_path, index = 0)
+                psa_bone.fcurve_loc_y = action.fcurves.new(data_path, index = 1)
+                psa_bone.fcurve_loc_z = action.fcurves.new(data_path, index = 2)
             
             # 1. Pre-add keyframes! \0/
             # 2. Set data: keyframe_points[].co[0..1]
@@ -1385,9 +1522,10 @@ def psaimport(filepath,
             psa_bone.fcurve_quat_y.keyframe_points.add(keyframes)
             psa_bone.fcurve_quat_z.keyframe_points.add(keyframes)
 
-            psa_bone.fcurve_loc_x.keyframe_points.add(keyframes) 
-            psa_bone.fcurve_loc_y.keyframe_points.add(keyframes) 
-            psa_bone.fcurve_loc_z.keyframe_points.add(keyframes) 
+            if not bRotationOnly:
+                psa_bone.fcurve_loc_x.keyframe_points.add(keyframes) 
+                psa_bone.fcurve_loc_y.keyframe_points.add(keyframes) 
+                psa_bone.fcurve_loc_z.keyframe_points.add(keyframes) 
             
         for i in range(0,min(maxframes, NumRawFrames)):
             # raw_key_index+= Totalbones * 5 #55
@@ -1427,8 +1565,10 @@ def psaimport(filepath,
                         
                 # @
                 # loc = psa_bone.post_quat.conjugated() * p_pos -  psa_bone.post_quat.conjugated() * psa_bone.orig_loc
-                loc = (p_pos - psa_bone.orig_loc)
-                loc.rotate( psa_bone.post_quat.conjugated() )
+                
+                if not bRotationOnly:
+                    loc = (p_pos - psa_bone.orig_loc)
+                    loc.rotate( psa_bone.post_quat.conjugated() )
                     
 
                 # Set it?
@@ -1453,13 +1593,15 @@ def psaimport(filepath,
                 psa_bone.fcurve_quat_y.keyframe_points[i].interpolation = fcurve_interpolation
                 psa_bone.fcurve_quat_z.keyframe_points[i].interpolation = fcurve_interpolation
                 
-                psa_bone.fcurve_loc_x.keyframe_points[i].co = i, loc.x
-                psa_bone.fcurve_loc_y.keyframe_points[i].co = i, loc.y
-                psa_bone.fcurve_loc_z.keyframe_points[i].co = i, loc.z
                 
-                psa_bone.fcurve_loc_x.keyframe_points[i].interpolation = fcurve_interpolation
-                psa_bone.fcurve_loc_y.keyframe_points[i].interpolation = fcurve_interpolation
-                psa_bone.fcurve_loc_z.keyframe_points[i].interpolation = fcurve_interpolation
+                if not bRotationOnly:
+                    psa_bone.fcurve_loc_x.keyframe_points[i].co = i, loc.x
+                    psa_bone.fcurve_loc_y.keyframe_points[i].co = i, loc.y
+                    psa_bone.fcurve_loc_z.keyframe_points[i].co = i, loc.z
+                    
+                    psa_bone.fcurve_loc_x.keyframe_points[i].interpolation = fcurve_interpolation
+                    psa_bone.fcurve_loc_y.keyframe_points[i].interpolation = fcurve_interpolation
+                    psa_bone.fcurve_loc_z.keyframe_points[i].interpolation = fcurve_interpolation
                 
                 # Old path. Slower.
                 # psa_bone.fcurve_quat_w.keyframe_points.insert(i,quat.w,{'NEEDED','FAST'}).interpolation = fcurve_interpolation
@@ -1499,8 +1641,7 @@ def psaimport(filepath,
         if not scene.is_nla_tweakmode:
             armature_obj.animation_data.action = first_action
     
-    if is_blen_280:
-        armature_obj.animation_data.action = first_action
+    # armature_obj.animation_data.action = first_action
     
     if bUpdateTimelineRange:
 
@@ -1517,8 +1658,7 @@ def psaimport(filepath,
     util_obj_set_active(context, armature_obj)
     
     # 2.8 crashes
-    if not is_blen_280:
-        scene.frame_set(0)
+    # scene.frame_set(0)
 
 class PSKPSA_OT_show_message(bpy.types.Operator):
     bl_idname = "pskpsa.message"
@@ -1569,14 +1709,14 @@ class PSKPSA_OT_show_message(bpy.types.Operator):
 class ImportProps():
 
     fBonesize : FloatProperty(
-            name = "Orphan bone length",
-            description = "Maximum orphan bone length",
-            default = 5.0, min = 0.1, max = 50, step = 0.3, precision = 2,
+            name = "Alt. bone length.",
+            description = "Bone length will be set to this value IF it's less than [Corrected avg. bone length]\nBone length = min( <this value> , [Corrected avg. bone length] )",
+            default = 5.0, min = 0.01, max = 50, step = 0.3, precision = 2,
             )
     fBonesizeRatio : FloatProperty(
             name = "Bone length ratio",
-            description = "Bone length = [average bone length] * [this value]",
-            default = 0.6, min = 0.1, max = 4, step = 0.05, precision = 2,
+            description = "Bone length will be set to this value IF it's less than  Corrected avg. bone length = <this value> * [calculated average bone length]",
+            default = 0.4, min = 0.1, max = 4, step = 0.05, precision = 2,
             )
     bSpltiUVdata : BoolProperty(
             name = "Split UV data",
@@ -1603,23 +1743,38 @@ class ImportProps():
             )
     bDontInvertRoot : BoolProperty(
             name = "Don't invert root bone",
-            description = " * Used by PSK and PSA.\n * Check it, if skeleton is badly oriented.",
-            default = False,
+            description = " * Used by PSK and PSA.\n * Uncheck it, if skeleton is badly oriented.",
+            default = True,
             )
     bFilenameAsPrefix :  BoolProperty(
             name = "Prefix action names",
-            description = "Use filename as prefix for action name.",
+            description = "Use the filename as a prefix for the action name.",
             default = False,
             )
     bActionsToTrack : BoolProperty(
             name = "All actions to NLA track",
-            description = "Add all imported action to new NLAtrack. One by one.",
+            description = "Add all imported actions to new NLAtrack. One by one.\nLook at \"Nonlinear Animation\" editor.",
             default = False,
             )
     bUpdateTimelineRange : BoolProperty(
             name = "Update timeline range",
             description = "Set timeline range to match imported action[s] length.\n * If \"All actions to NLA track\" is disabled, range will be set to hold longest action.",
             default = False,
+            )
+    bRotationOnly : BoolProperty(
+            name = "Rotation only",
+            description = "Create only rotation keyframes.",
+            default = False,
+            )
+    bScaleDown : BoolProperty(
+            name = "Scale down",
+            description = " * Used by PSK and PSA.\n * Multiply coordinates by 0.01\n * From \"cm.\" to \"m.\"",
+            default = True,
+            )
+    bToSRGB : BoolProperty(
+            name = "sRGB vertex color",
+            description = "Apply 'linear RGB -> sRGB' conversion over vertex colors",
+            default = True,
             )
             
     def draw_psk(self, context):
@@ -1637,9 +1792,11 @@ class ImportProps():
         sub = layout.row()
         # layout.prop(props, 'bDontInvertRoot', icon = 'ERROR' if props.bDontInvertRoot else 'NONE')
         sub.prop(props, 'bDontInvertRoot')
-        if props.bDontInvertRoot:
+        if not props.bDontInvertRoot:
             sub.label(text = "", icon = 'ERROR')
             
+        layout.prop(props, 'bScaleDown')
+        layout.prop(props, 'bToSRGB')
         layout.prop(props, 'fBonesizeRatio')
         layout.prop(props, 'fBonesize')
         
@@ -1649,6 +1806,7 @@ class ImportProps():
         layout.prop(props,'bActionsToTrack')
         layout.prop(props,'bFilenameAsPrefix')
         layout.prop(props,'bUpdateTimelineRange')
+        layout.prop(props,'bRotationOnly')
         # layout.prop(props, 'bDontInvertRoot')
         # layout.separator()
    
@@ -1756,6 +1914,8 @@ class IMPORT_OT_psk(bpy.types.Operator, ImportProps):
                         bReorientBones = props.bReorientBones,
                         bReorientDirectly = props.bReorientDirectly,
                         bDontInvertRoot = props.bDontInvertRoot,
+                        bScaleDown = props.bScaleDown,
+                        bToSRGB = props.bToSRGB,
                         error_callback = util_ui_show_msg
                         )
 
@@ -1799,6 +1959,8 @@ class IMPORT_OT_psa(bpy.types.Operator, ImportProps):
             oArmature = blen_get_armature_from_selection(),
             bDontInvertRoot = props.bDontInvertRoot,
             bUpdateTimelineRange = props.bUpdateTimelineRange,
+            bRotationOnly = props.bRotationOnly,
+            bScaleDown = props.bScaleDown,
             error_callback = util_ui_show_msg
             )
         return {'FINISHED'}
@@ -1813,7 +1975,7 @@ class IMPORT_OT_psa(bpy.types.Operator, ImportProps):
 
 class PSKPSA_PT_import_panel(bpy.types.Panel, ImportProps):
     bl_label = "PSK/PSA Import"
-    bl_idname = "VIEW3D_PT_udk_import"
+    bl_idname = "VIEW3D_PT_udk_import_280"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     bl_category = "PSK / PSA"
@@ -1869,11 +2031,8 @@ def register():
     for cls in classes:
         register_class(cls)
         
-    if is_blen_280:
-        bpy.types.TOPBAR_MT_file_import.append(menu_import_draw)
-    else:
-        bpy.types.INFO_MT_file_import.append(menu_import_draw)
-    
+    bpy.types.TOPBAR_MT_file_import.append(menu_import_draw)
+
     bpy.types.Scene.pskpsa_import = PointerProperty(type = PskImportOptions)
     
 def unregister():
@@ -1881,11 +2040,8 @@ def unregister():
     for cls in classes:
         unregister_class(cls)
         
-    if is_blen_280:
-        bpy.types.TOPBAR_MT_file_import.append(menu_import_draw)
-    else:
-        bpy.types.INFO_MT_file_import.remove(menu_import_draw)
-    
+    bpy.types.TOPBAR_MT_file_import.remove(menu_import_draw)
+
     del bpy.types.Scene.pskpsa_import
     
 if __name__ == "__main__":
