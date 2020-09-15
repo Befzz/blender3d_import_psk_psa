@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Import Unreal Skeleton Mesh (.psk)/Animation Set (.psa) (280)",
     "author": "Darknet, flufy3d, camg188, befzz",
-    "version": (2, 7, 13),
+    "version": (2, 7, 14),
     "blender": (2, 80, 0),
     "location": "File > Import > Skeleton Mesh (.psk)/Animation Set (.psa) OR View3D > Tool Shelf (key T) > Misc. tab",
     "description": "Import Skeleton Mesh / Animation Data",
@@ -679,6 +679,8 @@ def pskimport(filepath,
         psk_bone.name = util_bytes_to_str(name_raw)
         psk_bones[i] = psk_bone
         return psk_bone
+
+    psk_bone_name_toolong = False
         
     # indexed by bone index. array of psk_bone
     psk_bones = [None] * len(Bones)
@@ -706,6 +708,11 @@ def pskimport(filepath,
             psk_bone.bone_index = counter
             psk_bone.parent_index = ParentIndex
             
+            # Tested. 64 is getting cut to 63
+            if len(psk_bone.name) > 63:
+                psk_bone_name_toolong = True
+                # print('Warning. Bone name is too long:', psk_bone.name)
+
             # make sure we have valid parent_index
             if psk_bone.parent_index < 0:
                 psk_bone.parent_index = 0
@@ -806,8 +813,32 @@ def pskimport(filepath,
         
     #==================================================================================================
     # Skeleton. Build.
+        if psk_bone_name_toolong:
+            print('Warning. Some bones will be renamed(names are too long). Animation import may be broken.')
+            for psk_bone in psk_bones:
+
+                # TODO too long name cutting options?
+                orig_long_name = psk_bone.name
+
+                # Blender will cut the name here (>63 chars)
+                edit_bone = armature_obj.data.edit_bones.new(psk_bone.name)
+                edit_bone["orig_long_name"] = orig_long_name
+
+                # if orig_long_name != edit_bone.name:
+                #     print('--')
+                #     print(len(orig_long_name),orig_long_name)
+                #     print(len(edit_bone.name),edit_bone.name)
+
+                # Use the bone name made by blender (.001 , .002 etc.)
+                psk_bone.name = edit_bone.name
+
+        else:
+            for psk_bone in psk_bones:
+                edit_bone = armature_obj.data.edit_bones.new(psk_bone.name)
+                psk_bone.name = edit_bone.name
+
         for psk_bone in psk_bones:
-            edit_bone = armature_obj.data.edit_bones.new(psk_bone.name)
+            edit_bone = armature_obj.data.edit_bones[psk_bone.name]
 
             armature_obj.data.edit_bones.active = edit_bone
 
@@ -1463,7 +1494,15 @@ def psaimport(filepath,
         nla_track = armature_obj.animation_data.nla_tracks.new()
         nla_track.name = gen_name_part
         nla_stripes = nla_track.strips
+
         nla_track_last_frame = 0
+
+        if len(armature_obj.animation_data.nla_tracks) > 0:
+            for track in armature_obj.animation_data.nla_tracks:
+                if len(track.strips) > 0:
+                    if track.strips[-1].frame_end > nla_track_last_frame:
+                        nla_track_last_frame = track.strips[-1].frame_end
+
     
     is_first_action = True
     first_action = None
@@ -1568,8 +1607,30 @@ def psaimport(filepath,
                 
                 if not bRotationOnly:
                     loc = (p_pos - psa_bone.orig_loc)
+                    # "edit bone" location is in "parent space"
+                    # but "pose bone" location is in "local space(bone)"
+                    # so we need to transform from parent(edit_bone) to local space (pose_bone)
                     loc.rotate( psa_bone.post_quat.conjugated() )
                     
+                # if not bRotationOnly:
+                    # loc = (p_pos - psa_bone.orig_loc)
+                    # if psa_bone.parent is not None:
+                        # q = psa_bone.parent.post_quat.copy()
+                        # q.rotate( psa_bone.parent.orig_quat )
+                        # print(q)
+                        # loc.rotate( psa_bone.parent.post_quat.conjugated() )
+                        # loc.rotate( q.conjugated() )
+                        # loc.rotate( q )
+                        # pass
+                
+                # quat = p_quat.conjugated()
+                # quat = p_quat
+                # quat.rotate( psa_bone.orig_quat.conjugated() )
+                # quat = Quaternion()
+                # loc = -p_pos
+                # loc = (p_pos - psa_bone.orig_loc)
+                # loc = Vector()
+                # loc.rotate( psa_bone.post_quat.conjugated() )
 
                 # Set it?
                 # pose_bone.rotation_quaternion = quat
@@ -1620,10 +1681,14 @@ def psaimport(filepath,
 
         # Add action to tail of the nla track
         if bActionsToTrack:
-            if nla_track_last_frame == 0:
-                nla_stripes.new(Name, 0, action)
+            
+            if len(nla_track.strips) == 0:
+                strip = nla_stripes.new(Name, nla_track_last_frame, action)
             else:
-                nla_stripes.new(Name, nla_stripes[-1].frame_end, action)
+                strip = nla_stripes.new(Name, nla_stripes[-1].frame_end, action)
+
+            # Do not pollute track. Makes other tracks 'visible' through 'empty space'.
+            strip.extrapolation = 'NOTHING'
 
             nla_track_last_frame += NumRawFrames
 
@@ -1636,12 +1701,10 @@ def psaimport(filepath,
         # break
         
     scene = util_get_scene(context)
-    
+
     if not bActionsToTrack:
         if not scene.is_nla_tweakmode:
             armature_obj.animation_data.action = first_action
-    
-    # armature_obj.animation_data.action = first_action
     
     if bUpdateTimelineRange:
 
@@ -1753,7 +1816,7 @@ class ImportProps():
             )
     bActionsToTrack : BoolProperty(
             name = "All actions to NLA track",
-            description = "Add all imported actions to new NLAtrack. One by one.\nLook at \"Nonlinear Animation\" editor.",
+            description = "Add all imported actions to new NLAtrack. One by one.\nStarting at the very end.\nLook at \"Nonlinear Animation\" editor.",
             default = False,
             )
     bUpdateTimelineRange : BoolProperty(
@@ -1945,6 +2008,8 @@ class IMPORT_OT_psa(bpy.types.Operator, ImportProps):
             default = "*.psa",
             options = {'HIDDEN'},
             )
+    files : bpy.props.CollectionProperty(type=bpy.types.OperatorFileListElement, options={'HIDDEN', 'SKIP_SAVE'})
+    directory : bpy.props.StringProperty(subtype='FILE_PATH', options={'HIDDEN', 'SKIP_SAVE'})
             
     def draw(self, context):
         self.draw_psa(context)
@@ -1952,17 +2017,21 @@ class IMPORT_OT_psa(bpy.types.Operator, ImportProps):
       
     def execute(self, context):
         props = context.scene.pskpsa_import
-        psaimport(self.filepath,
-            context = context,
-            bFilenameAsPrefix = props.bFilenameAsPrefix, 
-            bActionsToTrack = props.bActionsToTrack, 
-            oArmature = blen_get_armature_from_selection(),
-            bDontInvertRoot = props.bDontInvertRoot,
-            bUpdateTimelineRange = props.bUpdateTimelineRange,
-            bRotationOnly = props.bRotationOnly,
-            bScaleDown = props.bScaleDown,
-            error_callback = util_ui_show_msg
-            )
+        
+        for _, fileListElement in enumerate(self.files):
+            fpath = self.directory + fileListElement.name
+            psaimport(
+                fpath,
+                context = context,
+                bFilenameAsPrefix = props.bFilenameAsPrefix, 
+                bActionsToTrack = props.bActionsToTrack, 
+                oArmature = blen_get_armature_from_selection(),
+                bDontInvertRoot = props.bDontInvertRoot,
+                bUpdateTimelineRange = props.bUpdateTimelineRange,
+                bRotationOnly = props.bRotationOnly,
+                bScaleDown = props.bScaleDown,
+                error_callback = util_ui_show_msg
+                )
         return {'FINISHED'}
     
     def invoke(self, context, event):
