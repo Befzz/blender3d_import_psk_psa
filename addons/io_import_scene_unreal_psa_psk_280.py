@@ -323,7 +323,8 @@ def pskimport(filepath,
             
     '''
     if not hasattr( error_callback, '__call__'):
-        error_callback = __pass
+        # error_callback = __pass
+        error_callback = print
         
     # ref_time = time.process_time()
     if not bImportbone and not bImportmesh:
@@ -1237,7 +1238,8 @@ def psaimport(filepath,
         bRotationOnly = False,
         bScaleDown = True,
         fcurve_interpolation = 'LINEAR',
-        error_callback = __pass
+        # error_callback = __pass
+        error_callback = print
         ):
     """Import animation data from 'filepath' using 'oArmature'
     
@@ -1952,35 +1954,74 @@ class IMPORT_OT_psk(bpy.types.Operator, ImportProps):
     # draw = ImportProps.draw_psk
     
     def execute(self, context):
-        props = bpy.context.scene.pskpsa_import
-        if props.import_mode == 'Mesh':
-            bImportmesh = True
-            bImportbone = False
-        elif props.import_mode == 'Skel':
-            bImportmesh = False
-            bImportbone = True
-        else:
-            bImportmesh = True
-            bImportbone = True
-        
+        if not self.filepath:
+            raise Exception("filepath not set")
+            
         no_errors = True
         
-        for f in enumerate(self.files):
-            fpath = self.directory + f[1].name
-            no_errors = no_errors and pskimport( 
-                        fpath,
-                        context = context,
-                        bImportmesh = bImportmesh, bImportbone = bImportbone,
-                        fBonesize = props.fBonesize,
-                        fBonesizeRatio = props.fBonesizeRatio,
-                        bSpltiUVdata = props.bSpltiUVdata,
-                        bReorientBones = props.bReorientBones,
-                        bReorientDirectly = props.bReorientDirectly,
-                        bDontInvertRoot = props.bDontInvertRoot,
-                        bScaleDown = props.bScaleDown,
-                        bToSRGB = props.bToSRGB,
-                        error_callback = util_ui_show_msg
-                        )
+        if not self.directory:
+            # possibly excuting from script, 
+            # bcs blender will set this value, even for a single file
+            
+            keywords = self.as_keywords(
+                ignore=(
+                    "import_mode",
+                    "filter_glob",
+                    "bFilenameAsPrefix",
+                    "bActionsToTrack",
+                    "bUpdateTimelineRange",
+                    "bRotationOnly",
+                    "files", 
+                    "directory"
+                    )
+                )
+                
+            if self.import_mode == 'Mesh':
+                bImportmesh = True
+                bImportbone = False
+            elif self.import_mode == 'Skel':
+                bImportmesh = False
+                bImportbone = True
+            else:
+                bImportmesh = True
+                bImportbone = True
+            
+            # ugly workaround
+            keywords["bImportbone"] = bImportbone
+            keywords["bImportmesh"] = bImportmesh
+            
+            no_errors = pskimport( **keywords )
+            
+        else:        
+            props = bpy.context.scene.pskpsa_import
+            if props.import_mode == 'Mesh':
+                bImportmesh = True
+                bImportbone = False
+            elif props.import_mode == 'Skel':
+                bImportmesh = False
+                bImportbone = True
+            else:
+                bImportmesh = True
+                bImportbone = True
+            
+            
+            for _, fileListElement in enumerate(self.files):
+                fpath = self.directory + fileListElement.name
+                
+                no_errors = no_errors and pskimport( 
+                            fpath,
+                            context = context,
+                            bImportmesh = bImportmesh, bImportbone = bImportbone,
+                            fBonesize = props.fBonesize,
+                            fBonesizeRatio = props.fBonesizeRatio,
+                            bSpltiUVdata = props.bSpltiUVdata,
+                            bReorientBones = props.bReorientBones,
+                            bReorientDirectly = props.bReorientDirectly,
+                            bDontInvertRoot = props.bDontInvertRoot,
+                            bScaleDown = props.bScaleDown,
+                            bToSRGB = props.bToSRGB,
+                            error_callback = util_ui_show_msg
+                            )
 
         if not no_errors:
             return {'CANCELLED'}
@@ -2017,6 +2058,25 @@ class IMPORT_OT_psa(bpy.types.Operator, ImportProps):
       
     def execute(self, context):
         props = context.scene.pskpsa_import
+        
+        if not self.directory:
+            # possibly excuting from script, 
+            # bcs blender will set this value, even for a single file
+            psaimport( **(self.as_keywords(
+                ignore=(
+                    "import_mode",
+                    "fBonesize",
+                    "fBonesizeRatio",
+                    "bSpltiUVdata",
+                    "bReorientBones",
+                    "bReorientDirectly",
+                    "bToSRGB",
+                    "filter_glob",
+                    "files", 
+                    "directory"
+                    )
+                )) )
+            return {'FINISHED'}
         
         for _, fileListElement in enumerate(self.files):
             fpath = self.directory + fileListElement.name
