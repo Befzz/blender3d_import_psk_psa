@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Import Unreal Skeleton Mesh (.psk)/Animation Set (.psa) (280)",
     "author": "Darknet, flufy3d, camg188, befzz",
-    "version": (2, 7, 14),
+    "version": (2, 7, 15),
     "blender": (2, 80, 0),
     "location": "File > Import > Skeleton Mesh (.psk)/Animation Set (.psa) OR View3D > Tool Shelf (key T) > Misc. tab",
     "description": "Import Skeleton Mesh / Animation Data",
@@ -297,7 +297,7 @@ def color_linear_to_srgb(c):
         return 1.055 * pow(c, 1.0 / 2.4) - 0.055
         
 def pskimport(filepath,
-        context = bpy.context,
+        context = None,
         bImportmesh = True,
         bImportbone = True,
         bSpltiUVdata = False,
@@ -356,7 +356,9 @@ def pskimport(filepath,
     VertexColors = None
     Extrauvs = []
     WedgeIdx_by_faceIdx = None
-        
+     
+    if not context:
+        context = bpy.context
     #================================================================================================== 
     # Materials   MaterialNameRaw | TextureIndex | PolyFlags | AuxMaterial | AuxFlags |  LodBias | LodStyle 
     # Only Name is usable.
@@ -1228,7 +1230,7 @@ def blen_get_armature_from_selection():
   
     
 def psaimport(filepath,
-        context = bpy.context,
+        context = None,
         oArmature = None,
         bFilenameAsPrefix = False,
         bActionsToTrack = False,
@@ -1266,6 +1268,10 @@ def psaimport(filepath,
    
     print ("Importing file: ", filepath)
     
+    
+    if not context:
+        context = bpy.context
+        
     armature_obj = oArmature
     
     if armature_obj is None:  
