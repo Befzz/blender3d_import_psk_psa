@@ -57,7 +57,7 @@ Github: https://github.com/Befzz/blender3d_import_psk_psa
 """
 
 """
-Version': '2.8.*' edited by floxay
+Version': '2.8.0' edited by floxay
 - Vertex normals import (VTXNORMS chunk)
         (requires custom UEViewer build /at the moment/)
 """
