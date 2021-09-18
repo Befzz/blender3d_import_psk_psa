@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Import Unreal Skeleton Mesh (.psk)/Animation Set (.psa) (280)",
     "author": "Darknet, flufy3d, camg188, befzz",
-    "version": (2, 7, 15),
+    "version": (2, 8, 0),
     "blender": (2, 80, 0),
     "location": "File > Import > Skeleton Mesh (.psk)/Animation Set (.psa) OR View3D > Tool Shelf (key T) > Misc. tab",
     "description": "Import Skeleton Mesh / Animation Data",
@@ -54,6 +54,12 @@ Github: https://github.com/Befzz/blender3d_import_psk_psa
 
 - No Scale support. (no test material)
 - No smoothing groups (not exported by umodel)
+"""
+
+"""
+Version': '2.8.*' edited by floxay
+- Vertex normals import (VTXNORMS chunk)
+        (requires custom UEViewer build /at the moment/)
 """
 
 # https://github.com/gildor2/UModel/blob/master/Exporters/Psk.h
@@ -282,6 +288,9 @@ def util_check_file_header(file, ftype):
         
     if not header_bytes.startswith( PSKPSA_FILE_HEADER[ftype] ):
         return False
+
+    global header_type
+    header_type, = unpack('i', header_bytes[20:20+4])
         
     return True
         
@@ -355,6 +364,7 @@ def pskimport(filepath,
     Weights = None
     VertexColors = None
     Extrauvs = []
+    Normals = None
     WedgeIdx_by_faceIdx = None
      
     if not context:
@@ -532,6 +542,21 @@ def pskimport(filepath,
             uvdata[counter] = unpack_data(chunk_data, chunk_datasize * counter) 
             
         Extrauvs.append(uvdata)
+
+    #==================================================================================================
+    # Vertex Normals NX | NY | NZ
+    def read_normals():
+        if not bImportmesh or header_type != 30000101:
+            return True
+
+        nonlocal Normals
+        Normals = [None] * chunk_datacount
+
+        unpack_data = Struct('3f').unpack_from
+
+        for counter in range(chunk_datacount):
+            (nx, ny, nz) = unpack_data(chunk_data, counter * chunk_datasize)
+            Normals[counter] = (nx, -ny, nz)
  
              
     CHUNKS_HANDLERS = {
@@ -546,7 +571,8 @@ def pskimport(filepath,
         'RAWW0000': read_weights,
         'RAWWEIGH': read_weights,
         'VERTEXCO': read_vertex_colors, # VERTEXCOLOR
-        'EXTRAUVS': read_extrauvs
+        'EXTRAUVS': read_extrauvs,
+        'VTXNORMS': read_normals
     }
     
     #===================================================================================================
@@ -1018,6 +1044,14 @@ def pskimport(filepath,
     # Mesh. Build.
     
         mesh_data.from_pydata(Vertices,[],Faces)
+
+    #==================================================================================================
+    # Vertex Normal. Set.
+
+        if header_type == 30000101:
+            mesh_data.polygons.foreach_set("use_smooth", [True] * len(mesh_data.polygons))
+            mesh_data.normals_split_custom_set_from_vertices(Normals)
+            mesh_data.use_auto_smooth = True
                 
     #===================================================================================================
     # UV. Set.
