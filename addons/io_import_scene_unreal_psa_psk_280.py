@@ -1047,7 +1047,7 @@ def pskimport(filepath,
     #==================================================================================================
     # Vertex Normal. Set.
 
-        if header_type == 30000101:
+        if header_type == 30000101 and len(Normals) != 0:
             mesh_data.polygons.foreach_set("use_smooth", [True] * len(mesh_data.polygons))
             mesh_data.normals_split_custom_set_from_vertices(Normals)
             mesh_data.use_auto_smooth = True
