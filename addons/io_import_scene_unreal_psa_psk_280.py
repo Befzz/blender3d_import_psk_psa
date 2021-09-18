@@ -555,8 +555,7 @@ def pskimport(filepath,
         unpack_data = Struct('3f').unpack_from
 
         for counter in range(chunk_datacount):
-            (nx, ny, nz) = unpack_data(chunk_data, counter * chunk_datasize)
-            Normals[counter] = (nx, -ny, nz)
+            Normals[counter] = unpack_data(chunk_data, counter * chunk_datasize)
  
              
     CHUNKS_HANDLERS = {
