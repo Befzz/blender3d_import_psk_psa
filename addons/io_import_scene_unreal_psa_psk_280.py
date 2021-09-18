@@ -288,9 +288,6 @@ def util_check_file_header(file, ftype):
         
     if not header_bytes.startswith( PSKPSA_FILE_HEADER[ftype] ):
         return False
-
-    global header_type
-    header_type, = unpack('i', header_bytes[20:20+4])
         
     return True
         
@@ -546,7 +543,7 @@ def pskimport(filepath,
     #==================================================================================================
     # Vertex Normals NX | NY | NZ
     def read_normals():
-        if not bImportmesh or header_type != 30000101:
+        if not bImportmesh:
             return True
 
         nonlocal Normals
@@ -1047,7 +1044,7 @@ def pskimport(filepath,
     #==================================================================================================
     # Vertex Normal. Set.
 
-        if header_type == 30000101 and len(Normals) != 0:
+        if len(Normals) != 0:
             mesh_data.polygons.foreach_set("use_smooth", [True] * len(mesh_data.polygons))
             mesh_data.normals_split_custom_set_from_vertices(Normals)
             mesh_data.use_auto_smooth = True
