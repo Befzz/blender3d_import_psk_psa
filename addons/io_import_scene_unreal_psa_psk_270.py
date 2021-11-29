@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Import Unreal Skeleton Mesh (.psk)/Animation Set (.psa) (270)",
     "author": "Darknet, flufy3d, camg188, befzz",
-    "version": (2, 7, 5),
+    "version": (2, 8, 0),
     "blender": (2, 76, 0),
     "location": "File > Import > Skeleton Mesh (.psk)/Animation Set (.psa) OR View3D > Tool Shelf (key T) > Misc. tab",
     "description": "Import Skeleton Mesh / Animation Data",
@@ -54,6 +54,12 @@ Github: https://github.com/Befzz/blender3d_import_psk_psa
 
 - No Scale support. (no test material)
 - No smoothing groups (not exported by umodel)
+"""
+
+"""
+Version': '2.8.0' edited by floxay
+- Vertex normals import (VTXNORMS chunk)
+        (requires custom UEViewer build /at the moment/)
 """
 
 # https://github.com/gildor2/UModel/blob/master/Exporters/Psk.h
@@ -269,7 +275,7 @@ def pskimport(filepath,
         bImportmesh = True,
         bImportbone = True,
         bSpltiUVdata = False,
-        fBonesize = 2.0,
+        fBonesize = 5.0,
         fBonesizeRatio = 0.6,
         bDontInvertRoot = False,
         bReorientBones = False,
@@ -320,6 +326,7 @@ def pskimport(filepath,
     Bones = None
     Weights = None
     Extrauvs = []
+    Normals = None
         
     #================================================================================================== 
     # Materials   MaterialNameRaw | TextureIndex | PolyFlags | AuxMaterial | AuxFlags |  LodBias | LodStyle 
@@ -348,7 +355,7 @@ def pskimport(filepath,
         UV_by_face = [None] * chunk_datacount
         Faces = [None] * chunk_datacount
         
-        if len(Vertices) > 65536:
+        if len(Wedges) > 65536:
             unpack_format = '=IIIBBI'
         else:
             unpack_format = '=HHHBBI'
@@ -465,6 +472,20 @@ def pskimport(filepath,
             uvdata[counter] = unpack_data(chunk_data, chunk_datasize * counter) 
             
         Extrauvs.append(uvdata)
+
+    #==================================================================================================
+    # Vertex Normals NX | NY | NZ
+    def read_normals():
+        if not bImportmesh:
+            return True
+
+        nonlocal Normals
+        Normals = [None] * chunk_datacount
+
+        unpack_data = Struct('3f').unpack_from
+
+        for counter in range(chunk_datacount):
+            Normals[counter] = unpack_data(chunk_data, counter * chunk_datasize)
  
              
     CHUNKS_HANDLERS = {
@@ -478,7 +499,8 @@ def pskimport(filepath,
         'REFSKEL0': read_bones, #?
         'RAWW0000': read_weights,
         'RAWWEIGH': read_weights,
-        'EXTRAUVS': read_extrauvs
+        'EXTRAUVS': read_extrauvs,
+        'VTXNORMS': read_normals
     }
     
     #===================================================================================================
@@ -608,6 +630,8 @@ def pskimport(filepath,
 
     #==================================================================================================
     # Prepare bone data
+    psk_bone_name_toolong = False
+
     def init_psk_bone(i, psk_bones, name_raw):
         psk_bone = class_psk_bone()
         psk_bone.children = []
@@ -638,7 +662,15 @@ def pskimport(filepath,
             
             psk_bone.bone_index = counter
             psk_bone.parent_index = ParentIndex
-            
+
+            if len(psk_bone.name) > 60:
+                psk_bone_name_toolong = True
+
+            # print(psk_bone.bone_index, psk_bone.parent_index, psk_bone.name)            
+            # make sure we have valid parent_index
+            if psk_bone.parent_index < 0:
+                psk_bone.parent_index = 0
+
             # psk_bone.scale = (scale_x, scale_y, scale_z)
 
             # store bind pose to make it available for psa-import via CustomProperty of the Blender bone
@@ -706,12 +738,35 @@ def pskimport(filepath,
         sum_bone_pos /= len(Bones) # average
         sum_bone_pos *= fBonesizeRatio # corrected
         
-        bone_size_choosen = max(0.01, min(sum_bone_pos, fBonesize))
-        
+        bone_size_choosen = max(0.01, round((min(sum_bone_pos, fBonesize))))
+
+        if not bReorientBones:
+            new_bone_size = bone_size_choosen
     #==================================================================================================
     # Skeleton. Build.
+        if psk_bone_name_toolong:
+            for psk_bone in psk_bones:
+
+
+                # TODO too long name cutting options?
+                long_name = psk_bone.name
+                psk_bone.name = psk_bone.name[-60:]
+
+                edit_bone = armature_obj.data.edit_bones.new(psk_bone.name)
+                edit_bone["long_name"] = long_name
+
+                psk_bone.name = edit_bone.name
+
+                # print(psk_bone.name)
+                # print(edit_bone.name)
+        else:
+            for psk_bone in psk_bones:
+                edit_bone = armature_obj.data.edit_bones.new(psk_bone.name)
+                psk_bone.name = edit_bone.name
+
+
         for psk_bone in psk_bones:
-            edit_bone = armature_obj.data.edit_bones.new(psk_bone.name)
+            edit_bone = armature_obj.data.edit_bones[psk_bone.name]
 
             armature_obj.data.edit_bones.active = edit_bone
 
@@ -725,7 +780,6 @@ def pskimport(filepath,
                 (new_bone_size, quat_orient_diff) = calc_bone_rotation(psk_bone, bone_size_choosen, bReorientDirectly, sum_bone_pos)
                 post_quat = psk_bone.orig_quat.conjugated() * quat_orient_diff
             else:
-                new_bone_size = bone_size_choosen
                 post_quat = psk_bone.orig_quat.conjugated()
             
             # only length of this vector is matter?
@@ -858,6 +912,14 @@ def pskimport(filepath,
     # Mesh. Build.
     
         mesh_data.from_pydata(Vertices,[],Faces)
+
+    #==================================================================================================
+    # Vertex Normal. Set.
+
+        if Normals is not None:
+            mesh_data.polygons.foreach_set("use_smooth", [True] * len(mesh_data.polygons))
+            mesh_data.normals_split_custom_set_from_vertices(Normals)
+            mesh_data.use_auto_smooth = True
                 
     #===================================================================================================
     # UV. Set.
