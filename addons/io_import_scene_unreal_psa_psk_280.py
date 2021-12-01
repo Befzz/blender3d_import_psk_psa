@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Import Unreal Skeleton Mesh (.psk)/Animation Set (.psa) (280)",
     "author": "Darknet, flufy3d, camg188, befzz",
-    "version": (2, 8, 1),
+    "version": (2, 8, 2),
     "blender": (2, 80, 0),
     "location": "File > Import > Skeleton Mesh (.psk)/Animation Set (.psa) OR View3D > Tool Shelf (key T) > Misc. tab",
     "description": "Import Skeleton Mesh / Animation Data",
@@ -1085,14 +1085,22 @@ def pskimport(filepath,
 
             pervertex = [None] * len(Vertices)
 
+            # some_vertex_color_set_more_than_once = False
+
             for counter, (vertexid,_,_,_) in enumerate(Wedges):
 
-                # Is it possible ?
-                if (pervertex[vertexid] is not None) and (pervertex[vertexid] != VertexColors[counter]):
-                    print('Not equal vertex colors. ', vertexid, pervertex[vertexid], VertexColors[counter])
+                # We need more than one vertex-color layer, but i'am not sure how to deal with it properly.
+
+                # if not some_vertex_color_set_more_than_once and (
+                #     (pervertex[vertexid] is not None) and (pervertex[vertexid] != VertexColors[counter])
+                # ):
+                    # print('Not equal vertex colors. ', vertexid, pervertex[vertexid], VertexColors[counter])
+                    # some_vertex_color_set_more_than_once = True
 
                 pervertex[vertexid] = VertexColors[counter]
 
+            # if some_vertex_color_set_more_than_once:
+            #     print('Some vertices have more than one vertex color data.')
 
             for counter, loop in enumerate(mesh_data.loops):
 
@@ -1922,7 +1930,7 @@ class PSKPSA_OT_show_message(bpy.types.Operator):
             if len(line) > maxlen:
                 maxlen = len(line)
 
-        print(self.message)
+        # print(self.message)
 
         self.report({'WARNING'}, self.message)
         return {'FINISHED'}
@@ -2144,72 +2152,79 @@ class IMPORT_OT_psk(bpy.types.Operator, ImportProps):
         if not self.filepath:
             raise Exception("filepath not set")
 
+        keywords = self.as_keywords(
+            ignore=(
+                "import_mode",
+                "filter_glob",
+                "bFilenameAsPrefix",
+                "bActionsToTrack",
+                "bUpdateTimelineRange",
+                "bRotationOnly",
+                "bBoneNameCaseSensitiveCmp",
+                "files", 
+                "directory",
+                "filepath"
+                )
+            )
+
+        if self.import_mode == 'Mesh':
+            bImportmesh = True
+            bImportbone = False
+        elif self.import_mode == 'Skel':
+            bImportmesh = False
+            bImportbone = True
+        else:
+            bImportmesh = True
+            bImportbone = True
+
+        # ugly workaround
+        keywords["bImportbone"] = bImportbone
+        keywords["bImportmesh"] = bImportmesh
+
+        # no_errors = pskimport( **keywords )
+    
+        # props = bpy.context.scene.pskpsa_import
+        # if props.import_mode == 'Mesh':
+        #     bImportmesh = True
+        #     bImportbone = False
+        # elif props.import_mode == 'Skel':
+        #     bImportmesh = False
+        #     bImportbone = True
+        # else:
+        #     bImportmesh = True
+        #     bImportbone = True
+
         no_errors = True
 
-        if not self.directory:
-            # possibly excuting from script, 
-            # bcs blender will set this value, even for a single file
+        from os import path
 
-            keywords = self.as_keywords(
-                ignore=(
-                    "import_mode",
-                    "filter_glob",
-                    "bFilenameAsPrefix",
-                    "bActionsToTrack",
-                    "bUpdateTimelineRange",
-                    "bRotationOnly",
-                    "bBoneNameCaseSensitiveCmp",
-                    "files", 
-                    "directory"
-                    )
-                )
+        if self.files:
+            dirname = path.dirname(self.filepath)
+            for file in self.files:
+                fpath = path.join(dirname, file.name)
 
-            if self.import_mode == 'Mesh':
-                bImportmesh = True
-                bImportbone = False
-            elif self.import_mode == 'Skel':
-                bImportmesh = False
-                bImportbone = True
-            else:
-                bImportmesh = True
-                bImportbone = True
-
-            # ugly workaround
-            keywords["bImportbone"] = bImportbone
-            keywords["bImportmesh"] = bImportmesh
-
-            no_errors = pskimport( **keywords )
-
-        else:        
-            props = bpy.context.scene.pskpsa_import
-            if props.import_mode == 'Mesh':
-                bImportmesh = True
-                bImportbone = False
-            elif props.import_mode == 'Skel':
-                bImportmesh = False
-                bImportbone = True
-            else:
-                bImportmesh = True
-                bImportbone = True
-
-
-            for _, fileListElement in enumerate(self.files):
-                fpath = self.directory + fileListElement.name
-
-                no_errors = no_errors and pskimport( 
-                            fpath,
+                if not pskimport( 
+                            filepath = fpath,
                             context = context,
-                            bImportmesh = bImportmesh, bImportbone = bImportbone,
-                            fBonesize = props.fBonesize,
-                            fBonesizeRatio = props.fBonesizeRatio,
-                            bSpltiUVdata = props.bSpltiUVdata,
-                            bReorientBones = props.bReorientBones,
-                            bReorientDirectly = props.bReorientDirectly,
-                            bDontInvertRoot = props.bDontInvertRoot,
-                            bScaleDown = props.bScaleDown,
-                            bToSRGB = props.bToSRGB,
-                            error_callback = util_ui_show_msg
-                            )
+                            # bImportmesh = bImportmesh, bImportbone = bImportbone,
+                            # fBonesize = props.fBonesize,
+                            # fBonesizeRatio = props.fBonesizeRatio,
+                            # bSpltiUVdata = props.bSpltiUVdata,
+                            # bReorientBones = props.bReorientBones,
+                            # bReorientDirectly = props.bReorientDirectly,
+                            # bDontInvertRoot = props.bDontInvertRoot,
+                            # bScaleDown = props.bScaleDown,
+                            # bToSRGB = props.bToSRGB,
+                            error_callback = util_ui_show_msg,
+                            **keywords
+                ):
+                    no_errors = False
+        else:
+            no_errors = pskimport(
+                            filepath = self.filepath,
+                            context = context,
+                            error_callback = util_ui_show_msg,
+                            **keywords )
 
         if not no_errors:
             return {'CANCELLED'}
@@ -2245,12 +2260,11 @@ class IMPORT_OT_psa(bpy.types.Operator, ImportProps):
         self.layout.prop(context.scene.pskpsa_import, 'bDontInvertRoot')
 
     def execute(self, context):
-        props = context.scene.pskpsa_import
+        # props = context.scene.pskpsa_import
 
-        if not self.directory:
-            # possibly excuting from script, 
-            # bcs blender will set this value, even for a single file
-            psaimport( **(self.as_keywords(
+        no_errors = True
+
+        keywords = self.as_keywords(
                 ignore=(
                     "import_mode",
                     "fBonesize",
@@ -2261,27 +2275,44 @@ class IMPORT_OT_psa(bpy.types.Operator, ImportProps):
                     "bToSRGB",
                     "filter_glob",
                     "files", 
-                    "directory"
+                    "directory",
+                    "filepath"
                     )
-                )) )
-            return {'FINISHED'}
-
-        for _, fileListElement in enumerate(self.files):
-            fpath = self.directory + fileListElement.name
-            psaimport(
-                fpath,
-                context = context,
-                bFilenameAsPrefix = props.bFilenameAsPrefix, 
-                bActionsToTrack = props.bActionsToTrack, 
-                oArmature = blen_get_armature_from_selection(),
-                bDontInvertRoot = props.bDontInvertRoot,
-                bUpdateTimelineRange = props.bUpdateTimelineRange,
-                bRotationOnly = props.bRotationOnly,
-                bScaleDown = props.bScaleDown,
-                bBoneNameCaseSensitiveCmp = props.bBoneNameCaseSensitiveCmp,
-                error_callback = util_ui_show_msg
                 )
-        return {'FINISHED'}
+        from os import path
+
+        if self.files:
+            dirname = path.dirname(self.filepath)
+            for file in self.files:
+                fpath = path.join(dirname, file.name)
+
+                if not psaimport(
+                    filepath = fpath,
+                    context = context,
+                    # bFilenameAsPrefix = props.bFilenameAsPrefix, 
+                    # bActionsToTrack = props.bActionsToTrack, 
+                    # oArmature = blen_get_armature_from_selection(),
+                    # bDontInvertRoot = props.bDontInvertRoot,
+                    # bUpdateTimelineRange = props.bUpdateTimelineRange,
+                    # bRotationOnly = props.bRotationOnly,
+                    # bScaleDown = props.bScaleDown,
+                    # bBoneNameCaseSensitiveCmp = props.bBoneNameCaseSensitiveCmp,
+                    error_callback = util_ui_show_msg,
+                    **keywords
+                ):
+                    no_errors = False
+        else:
+            no_errors = psaimport(
+                filepath = self.filepath,
+                context = context,
+                error_callback = util_ui_show_msg,
+                **keywords
+            )
+
+        if not no_errors:
+            return {'CANCELLED'}
+        else:
+            return {'FINISHED'}
 
     def invoke(self, context, event):
         if blen_get_armature_from_selection() is None:
