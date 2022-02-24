@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Import Unreal Skeleton Mesh (.psk)/Animation Set (.psa) (280)",
     "author": "Darknet, flufy3d, camg188, befzz",
-    "version": (2, 8, 2),
+    "version": (2, 8, 3),
     "blender": (2, 80, 0),
     "location": "File > Import > Skeleton Mesh (.psk)/Animation Set (.psa) OR View3D > Tool Shelf (key T) > Misc. tab",
     "description": "Import Skeleton Mesh / Animation Data",
@@ -2152,79 +2152,86 @@ class IMPORT_OT_psk(bpy.types.Operator, ImportProps):
         if not self.filepath:
             raise Exception("filepath not set")
 
-        keywords = self.as_keywords(
-            ignore=(
-                "import_mode",
-                "filter_glob",
-                "bFilenameAsPrefix",
-                "bActionsToTrack",
-                "bUpdateTimelineRange",
-                "bRotationOnly",
-                "bBoneNameCaseSensitiveCmp",
-                "files", 
-                "directory",
-                "filepath"
-                )
-            )
+        # keywords = self.as_keywords(
+        #     ignore=(
+        #         "import_mode",
+        #         "filter_glob",
+        #         "bFilenameAsPrefix",
+        #         "bActionsToTrack",
+        #         "bUpdateTimelineRange",
+        #         "bRotationOnly",
+        #         "bBoneNameCaseSensitiveCmp",
+        #         "files", 
+        #         "directory",
+        #         "filepath"
+        #         )
+        #     )
 
-        if self.import_mode == 'Mesh':
-            bImportmesh = True
-            bImportbone = False
-        elif self.import_mode == 'Skel':
-            bImportmesh = False
-            bImportbone = True
-        else:
-            bImportmesh = True
-            bImportbone = True
-
-        # ugly workaround
-        keywords["bImportbone"] = bImportbone
-        keywords["bImportmesh"] = bImportmesh
-
-        # no_errors = pskimport( **keywords )
-    
-        # props = bpy.context.scene.pskpsa_import
-        # if props.import_mode == 'Mesh':
+        # if self.import_mode == 'Mesh':
         #     bImportmesh = True
         #     bImportbone = False
-        # elif props.import_mode == 'Skel':
+        # elif self.import_mode == 'Skel':
         #     bImportmesh = False
         #     bImportbone = True
         # else:
         #     bImportmesh = True
         #     bImportbone = True
 
+        # ugly workaround
+        # keywords["bImportbone"] = bImportbone
+        # keywords["bImportmesh"] = bImportmesh
+
+        # no_errors = pskimport( **keywords )
+    
+        # print(keywords)
+        # print(props.as_keywords())
+        props = bpy.context.scene.pskpsa_import
+        if props.import_mode == 'Mesh':
+            bImportmesh = True
+            bImportbone = False
+        elif props.import_mode == 'Skel':
+            bImportmesh = False
+            bImportbone = True
+        else:
+            bImportmesh = True
+            bImportbone = True
+
         no_errors = True
 
         from os import path
+
+        def pskimport_proxy():
+            nonlocal props, fpath, context, bImportbone, bImportmesh
+            return pskimport( 
+                            filepath = fpath,
+                            context = context,
+                            bImportmesh = bImportmesh, bImportbone = bImportbone,
+                            fBonesize = props.fBonesize,
+                            fBonesizeRatio = props.fBonesizeRatio,
+                            bSpltiUVdata = props.bSpltiUVdata,
+                            bReorientBones = props.bReorientBones,
+                            bReorientDirectly = props.bReorientDirectly,
+                            bDontInvertRoot = props.bDontInvertRoot,
+                            bScaleDown = props.bScaleDown,
+                            bToSRGB = props.bToSRGB,
+                            error_callback = util_ui_show_msg)
 
         if self.files:
             dirname = path.dirname(self.filepath)
             for file in self.files:
                 fpath = path.join(dirname, file.name)
 
-                if not pskimport( 
-                            filepath = fpath,
-                            context = context,
-                            # bImportmesh = bImportmesh, bImportbone = bImportbone,
-                            # fBonesize = props.fBonesize,
-                            # fBonesizeRatio = props.fBonesizeRatio,
-                            # bSpltiUVdata = props.bSpltiUVdata,
-                            # bReorientBones = props.bReorientBones,
-                            # bReorientDirectly = props.bReorientDirectly,
-                            # bDontInvertRoot = props.bDontInvertRoot,
-                            # bScaleDown = props.bScaleDown,
-                            # bToSRGB = props.bToSRGB,
-                            error_callback = util_ui_show_msg,
-                            **keywords
-                ):
+                if not pskimport_proxy():
                     no_errors = False
         else:
-            no_errors = pskimport(
-                            filepath = self.filepath,
-                            context = context,
-                            error_callback = util_ui_show_msg,
-                            **keywords )
+            fpath = self.filepath
+            no_errors = pskimport_proxy
+
+            # no_errors = pskimport(
+            #                 filepath = self.filepath,
+            #                 context = context,
+            #                 error_callback = util_ui_show_msg,
+            #                 **keywords )
 
         if not no_errors:
             return {'CANCELLED'}
@@ -2260,54 +2267,53 @@ class IMPORT_OT_psa(bpy.types.Operator, ImportProps):
         self.layout.prop(context.scene.pskpsa_import, 'bDontInvertRoot')
 
     def execute(self, context):
-        # props = context.scene.pskpsa_import
+        props = context.scene.pskpsa_import
 
         no_errors = True
 
-        keywords = self.as_keywords(
-                ignore=(
-                    "import_mode",
-                    "fBonesize",
-                    "fBonesizeRatio",
-                    "bSpltiUVdata",
-                    "bReorientBones",
-                    "bReorientDirectly",
-                    "bToSRGB",
-                    "filter_glob",
-                    "files", 
-                    "directory",
-                    "filepath"
-                    )
-                )
+        # keywords = self.as_keywords(
+        #         ignore=(
+        #             "import_mode",
+        #             "fBonesize",
+        #             "fBonesizeRatio",
+        #             "bSpltiUVdata",
+        #             "bReorientBones",
+        #             "bReorientDirectly",
+        #             "bToSRGB",
+        #             "filter_glob",
+        #             "files", 
+        #             "directory",
+        #             "filepath"
+        #             )
+        #         )
         from os import path
+
+        def psaimport_proxy():
+            nonlocal props, fpath, context
+            return psaimport(
+                    filepath = fpath,
+                    context = context,
+                    bFilenameAsPrefix = props.bFilenameAsPrefix, 
+                    bActionsToTrack = props.bActionsToTrack, 
+                    oArmature = blen_get_armature_from_selection(),
+                    bDontInvertRoot = props.bDontInvertRoot,
+                    bUpdateTimelineRange = props.bUpdateTimelineRange,
+                    bRotationOnly = props.bRotationOnly,
+                    bScaleDown = props.bScaleDown,
+                    bBoneNameCaseSensitiveCmp = props.bBoneNameCaseSensitiveCmp,
+                    error_callback = util_ui_show_msg,
+                )
 
         if self.files:
             dirname = path.dirname(self.filepath)
             for file in self.files:
                 fpath = path.join(dirname, file.name)
 
-                if not psaimport(
-                    filepath = fpath,
-                    context = context,
-                    # bFilenameAsPrefix = props.bFilenameAsPrefix, 
-                    # bActionsToTrack = props.bActionsToTrack, 
-                    # oArmature = blen_get_armature_from_selection(),
-                    # bDontInvertRoot = props.bDontInvertRoot,
-                    # bUpdateTimelineRange = props.bUpdateTimelineRange,
-                    # bRotationOnly = props.bRotationOnly,
-                    # bScaleDown = props.bScaleDown,
-                    # bBoneNameCaseSensitiveCmp = props.bBoneNameCaseSensitiveCmp,
-                    error_callback = util_ui_show_msg,
-                    **keywords
-                ):
+                if not psaimport_proxy():
                     no_errors = False
         else:
-            no_errors = psaimport(
-                filepath = self.filepath,
-                context = context,
-                error_callback = util_ui_show_msg,
-                **keywords
-            )
+            fpath = self.filepath
+            no_errors = psaimport_proxy()
 
         if not no_errors:
             return {'CANCELLED'}
