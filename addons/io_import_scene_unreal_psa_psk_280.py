@@ -1080,34 +1080,23 @@ def pskimport(filepath,
     # VertexColors
 
         if VertexColors is not None:
+            pervertex = [[None] * len(Vertices)]
+            vtx_color_layers = [mesh_data.vertex_colors.new(name="PSKVTXCOL_0", do_init=False)];
+            pervertexId = [0] * len(Vertices)
 
-            vtx_color_layer = mesh_data.vertex_colors.new(name = "PSKVTXCOL_0", do_init = False)
-
-            pervertex = [None] * len(Vertices)
-
-            # some_vertex_color_set_more_than_once = False
-
-            for counter, (vertexid,_,_,_) in enumerate(Wedges):
-
-                # We need more than one vertex-color layer, but i'am not sure how to deal with it properly.
-
-                # if not some_vertex_color_set_more_than_once and (
-                #     (pervertex[vertexid] is not None) and (pervertex[vertexid] != VertexColors[counter])
-                # ):
-                    # print('Not equal vertex colors. ', vertexid, pervertex[vertexid], VertexColors[counter])
-                    # some_vertex_color_set_more_than_once = True
-
-                pervertex[vertexid] = VertexColors[counter]
-
-            # if some_vertex_color_set_more_than_once:
-            #     print('Some vertices have more than one vertex color data.')
+            for counter, (vertexid, _, _, _) in enumerate(Wedges):
+                layerId = pervertexId[vertexid]
+                if layerId > len(pervertex) - 1:
+                    pervertex.append([None] * len(Vertices))
+                    vtx_color_layers.append(mesh_data.vertex_colors.new(name="PSKVTXCOL_%d" % layerId, do_init=False))
+                pervertexId[vertexid] = layerId + 1
+                pervertex[layerId][vertexid] = VertexColors[counter]
 
             for counter, loop in enumerate(mesh_data.loops):
-
-                color = pervertex[ loop.vertex_index ]
-
-                if color is None:
-                    vtx_color_layer.data[ counter ].color = (1.,1.,1.,1.)
+                for vtx_counter, vtx_color_layer in enumerate(vtx_color_layers):
+                    color = pervertex[vtx_counter][loop.vertex_index]
+                    if color is None:
+                        vtx_color_layer.data[counter].color = (1., 1., 1., 1.)
                 else:
                     if bToSRGB:
                         vtx_color_layer.data[ counter ].color = (
