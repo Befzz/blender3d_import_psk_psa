@@ -1097,21 +1097,21 @@ def pskimport(filepath,
                     color = pervertex[vtx_counter][loop.vertex_index]
                     if color is None:
                         vtx_color_layer.data[counter].color = (1., 1., 1., 1.)
-                else:
-                    if bToSRGB:
-                        vtx_color_layer.data[ counter ].color = (
-                            color_linear_to_srgb(color[0] / 255),
-                            color_linear_to_srgb(color[1] / 255),
-                            color_linear_to_srgb(color[2] / 255),
-                            color[3] / 255
-                        )
                     else:
-                        vtx_color_layer.data[ counter ].color = (
-                            color[0] / 255,
-                            color[1] / 255,
-                            color[2] / 255,
-                            color[3] / 255
-                        )
+                        if bToSRGB:
+                            vtx_color_layer.data[ counter ].color = (
+                                color_linear_to_srgb(color[0] / 255),
+                                color_linear_to_srgb(color[1] / 255),
+                                color_linear_to_srgb(color[2] / 255),
+                                color[3] / 255
+                            )
+                        else:
+                            vtx_color_layer.data[ counter ].color = (
+                                color[0] / 255,
+                                color[1] / 255,
+                                color[2] / 255,
+                                color[3] / 255
+                            )
 
     #==============================================================================================
     # Extra UVs. Set.
