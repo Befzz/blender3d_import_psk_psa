@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Import Unreal Skeleton Mesh (.psk)/Animation Set (.psa) (270)",
     "author": "Darknet, flufy3d, camg188, befzz",
-    "version": (2, 8, 0),
+    "version": (2, 8, 4),
     "blender": (2, 76, 0),
     "location": "File > Import > Skeleton Mesh (.psk)/Animation Set (.psa) OR View3D > Tool Shelf (key T) > Misc. tab",
     "description": "Import Skeleton Mesh / Animation Data",
@@ -57,9 +57,23 @@ Github: https://github.com/Befzz/blender3d_import_psk_psa
 """
 
 """
-Version': '2.8.0' edited by floxay
+Changelog:
+2.8.4: (floxay)
+- Animation bone scaling import (SCALEKEYS chunk)
+       (requires custom UEViewer build /at the moment/ or Fmodel)
+
+2.8.3: (beffz)
+!CHANGES MISSING FROM 270!
+
+2.8.2: (beffz)
+!CHANGES MISSING FROM 270!
+
+2.8.1: (beffz)
+!CHANGES MISSING FROM 270!
+
+2.8.0: (floxay)
 - Vertex normals import (VTXNORMS chunk)
-        (requires custom UEViewer build /at the moment/)
+        (requires custom UEViewer build /at the moment/ or Fmodel)
 """
 
 # https://github.com/gildor2/UModel/blob/master/Exporters/Psk.h
@@ -1048,6 +1062,9 @@ class class_psa_bone:
     fcurve_quat_y = None
     fcurve_quat_z = None
     fcurve_quat_w = None
+    fcurve_scale_x = None
+    fcurve_scale_y = None
+    fcurve_scale_z = None
     
     post_quat = None
     orig_quat = None
@@ -1283,6 +1300,28 @@ def psaimport(filepath,
         
         Raw_Key_List[counter] = (pos, quat)
     
+    #============================================================================================== 
+    # Raw scale keys (VScaleAnimKey) 3f vec, 1f time
+    #============================================================================================== 
+    curr_pos = psafile.tell() # save current position
+    psafile.seek(0, 2) # seek to end
+
+    if (curr_pos != psafile.tell()): # make sure not eof
+        psafile.seek(curr_pos) # seek back to previous pos
+        read_chunk()
+
+        Raw_ScaleKey_List = [None] * chunk_datacount
+
+        unpack_data = Struct('3f4x').unpack_from
+
+        for counter in range(chunk_datacount):
+            scale = Vector()
+
+            (scale.x,  scale.y,  scale.z) = unpack_data( chunk_data, chunk_datasize * counter)
+            
+            Raw_ScaleKey_List[counter] = scale
+    
+
     psafile.close()
     
     utils_set_mode('OBJECT')
@@ -1361,6 +1400,17 @@ def psaimport(filepath,
             psa_bone.fcurve_loc_x.keyframe_points.add(keyframes) 
             psa_bone.fcurve_loc_y.keyframe_points.add(keyframes) 
             psa_bone.fcurve_loc_z.keyframe_points.add(keyframes) 
+
+            if Raw_ScaleKey_List:
+                data_path = pose_bone.path_from_id("scale")
+                psa_bone.fcurve_scale_x = action.fcurves.new(data_path, index = 0)
+                psa_bone.fcurve_scale_y = action.fcurves.new(data_path, index = 1)
+                psa_bone.fcurve_scale_z = action.fcurves.new(data_path, index = 2)
+
+                
+                psa_bone.fcurve_scale_x.keyframe_points.add(keyframes)
+                psa_bone.fcurve_scale_y.keyframe_points.add(keyframes)
+                psa_bone.fcurve_scale_z.keyframe_points.add(keyframes)
             
         for i in range(0,min(maxframes, NumRawFrames)):
             # raw_key_index+= Totalbones * 5 #55
@@ -1419,6 +1469,16 @@ def psaimport(filepath,
                 psa_bone.fcurve_quat_x.keyframe_points[i].interpolation = fcurve_interpolation
                 psa_bone.fcurve_quat_y.keyframe_points[i].interpolation = fcurve_interpolation
                 psa_bone.fcurve_quat_z.keyframe_points[i].interpolation = fcurve_interpolation
+
+                if Raw_ScaleKey_List:
+                    scale = Raw_ScaleKey_List[raw_key_index]
+                    
+                    psa_bone.fcurve_scale_x.keyframe_points[i].co = i, scale.x
+                    psa_bone.fcurve_scale_y.keyframe_points[i].co = i, scale.y
+                    psa_bone.fcurve_scale_z.keyframe_points[i].co = i, scale.z
+                    psa_bone.fcurve_scale_x.keyframe_points[i].interpolation = fcurve_interpolation
+                    psa_bone.fcurve_scale_y.keyframe_points[i].interpolation = fcurve_interpolation
+                    psa_bone.fcurve_scale_z.keyframe_points[i].interpolation = fcurve_interpolation
                 
                 psa_bone.fcurve_loc_x.keyframe_points[i].co = i, loc.x
                 psa_bone.fcurve_loc_y.keyframe_points[i].co = i, loc.y
