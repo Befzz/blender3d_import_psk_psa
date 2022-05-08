@@ -1874,9 +1874,9 @@ def psaimport(filepath,
         if bActionsToTrack:
 
             if len(nla_track.strips) == 0:
-                strip = nla_stripes.new(action_name, nla_track_last_frame, action)
+                strip = nla_stripes.new(action_name, int(nla_track_last_frame), action)
             else:
-                strip = nla_stripes.new(action_name, nla_stripes[-1].frame_end, action)
+                strip = nla_stripes.new(action_name, int(nla_stripes[-1].frame_end), action)
 
             # Do not pollute track. Makes other tracks 'visible' through 'empty space'.
             strip.extrapolation = 'NOTHING'
