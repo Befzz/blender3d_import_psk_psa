@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Import Unreal Skeleton Mesh (.psk)/Animation Set (.psa) (270)",
     "author": "Darknet, flufy3d, camg188, befzz",
-    "version": (2, 8, 0),
+    "version": (2, 8, 1),
     "blender": (2, 76, 0),
     "location": "File > Import > Skeleton Mesh (.psk)/Animation Set (.psa) OR View3D > Tool Shelf (key T) > Misc. tab",
     "description": "Import Skeleton Mesh / Animation Data",
@@ -60,6 +60,11 @@ Github: https://github.com/Befzz/blender3d_import_psk_psa
 Version': '2.8.0' edited by floxay
 - Vertex normals import (VTXNORMS chunk)
         (requires custom UEViewer build /at the moment/)
+"""
+
+"""
+Version': '2.8.1' edited by Half
+- Morph targets import (MRPHINFO and MRPHDATA chunks)
 """
 
 # https://github.com/gildor2/UModel/blob/master/Exporters/Psk.h
@@ -327,6 +332,8 @@ def pskimport(filepath,
     Weights = None
     Extrauvs = []
     Normals = None
+    MorphInfos = None
+    MorphDeltas = None
         
     #================================================================================================== 
     # Materials   MaterialNameRaw | TextureIndex | PolyFlags | AuxMaterial | AuxFlags |  LodBias | LodStyle 
@@ -486,6 +493,36 @@ def pskimport(filepath,
 
         for counter in range(chunk_datacount):
             Normals[counter] = unpack_data(chunk_data, counter * chunk_datasize)
+
+    # ==================================================================================================
+    # Morph Info MorphName | VertexCount
+
+    def read_morph_info():
+        if not bImportmesh:
+            return True
+
+        nonlocal MorphInfos
+        MorphInfos = [None] * chunk_datacount
+
+        unpack_data = Struct('=64si').unpack_from
+
+        for counter in range(chunk_datacount):
+            MorphInfos[counter] = unpack_data(chunk_data, counter * chunk_datasize)
+
+    # ==================================================================================================
+    # Morph Data PosX | PosY | PosZ | NormX | NormY | NormZ | Point Index
+
+    def read_morph_data():
+        if not bImportmesh:
+            return True
+
+        nonlocal MorphDeltas
+        MorphDeltas = [None] * chunk_datacount
+
+        unpack_data = Struct('6fi').unpack_from
+
+        for counter in range(chunk_datacount):
+            MorphDeltas[counter] = unpack_data(chunk_data, counter * chunk_datasize)
  
              
     CHUNKS_HANDLERS = {
@@ -500,7 +537,9 @@ def pskimport(filepath,
         'RAWW0000': read_weights,
         'RAWWEIGH': read_weights,
         'EXTRAUVS': read_extrauvs,
-        'VTXNORMS': read_normals
+        'VTXNORMS': read_normals,
+        'MRPHINFO': read_morph_info,
+        'MRPHDATA': read_morph_data
     }
     
     #===================================================================================================
@@ -920,6 +959,29 @@ def pskimport(filepath,
             mesh_data.polygons.foreach_set("use_smooth", [True] * len(mesh_data.polygons))
             mesh_data.normals_split_custom_set_from_vertices(Normals)
             mesh_data.use_auto_smooth = True
+
+    # ==================================================================================================
+    # Morph Target. Set.
+
+    if MorphInfos is not None:
+        default_key = mesh_obj.shape_key_add(from_mix=False)
+        default_key.name = "Default"
+        default_key.interpolation = 'KEY_LINEAR'
+
+        morph_data_position = 0
+
+        for (morph_name, vertex_count) in MorphInfos:
+            key = mesh_obj.shape_key_add(from_mix=False)
+            key.name = util_bytes_to_str(morph_name)
+            key.interpolation = 'KEY_LINEAR'
+
+            for i in range(morph_data_position, morph_data_position + vertex_count):
+                (pos_x, pos_y, pos_z, norm_x, norm_y, norm_z, index) = MorphDeltas[i]
+
+                key.data[index].co += Vector((pos_x, -pos_y, pos_z))
+                # is there nowhere to add normal delta ??? normals will be unused for now ig
+
+            morph_data_position += vertex_count
                 
     #===================================================================================================
     # UV. Set.
