@@ -19,7 +19,7 @@
 bl_info = {
     "name": "Import Unreal Skeleton Mesh (.psk)/Animation Set (.psa) (280)",
     "author": "Darknet, flufy3d, camg188, befzz",
-    "version": (2, 8, 4),
+    "version": (2, 8, 5),
     "blender": (2, 80, 0),
     "location": "File > Import > Skeleton Mesh (.psk)/Animation Set (.psa) OR View3D > Tool Shelf (key T) > Misc. tab",
     "description": "Import Skeleton Mesh / Animation Data",
@@ -58,9 +58,12 @@ Github: https://github.com/Befzz/blender3d_import_psk_psa
 
 """
 Changelog:
+2.8.5: (floxay)
+- Disable bone colorizing on Blender 4 to prevent crashing due to Blender API changes
+
 2.8.4: (floxay)
 - Animation bone scaling import (SCALEKEYS chunk)
-       (requires custom UEViewer build /at the moment/ or Fmodel)
+        (requires custom UEViewer build /at the moment/ or Fmodel)
 
 2.8.3: (beffz)
 - fix panel ui not working #76
@@ -1186,7 +1189,7 @@ def pskimport(filepath,
     #==============================================================================================
     # Skeleton. Colorize.
 
-    if bImportbone:
+    if bImportbone and bpy.app.version[0] < 4:
 
         bone_group_unused = armature_obj.pose.bone_groups.new(name = "Unused bones")
         bone_group_unused.color_set = 'THEME14'
